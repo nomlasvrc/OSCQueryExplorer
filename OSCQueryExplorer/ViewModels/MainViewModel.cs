@@ -378,7 +378,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         HttpRequestException { StatusCode: { } statusCode } => $"OSCQueryサーバーがHTTP {(int)statusCode}を返しました。URLとサーバーの状態を確認してください。",
         HttpRequestException => $"OSCQueryサーバーに接続できませんでした。{exception.Message}",
         TaskCanceledException => "接続がタイムアウトしました。接続先が起動しているか確認してください。",
-        System.Text.Json.JsonException => "接続先から受信したOSCQuery情報を解析できませんでした。",
+        JsonException => "接続先から受信したOSCQuery情報を解析できませんでした。",
         NotSupportedException => exception.Message,
         _ => $"接続中にエラーが発生しました。{exception.Message}"
     };
