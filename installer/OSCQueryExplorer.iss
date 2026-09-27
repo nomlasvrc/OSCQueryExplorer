@@ -18,6 +18,7 @@ AppId={{B3D097D5-0E9D-4ACC-AF25-08F5D48D6370}
 AppName=OSCQuery Explorer
 AppVersion={#AppVersion}
 AppPublisher=nomlas
+LicenseFile=..\LICENSE
 DefaultDirName={autopf}\OSCQuery Explorer
 DefaultGroupName=OSCQuery Explorer
 DisableProgramGroupPage=yes
@@ -72,7 +73,7 @@ const
 var
   DotNetRuntimeRestartRequired: Boolean;
 
-function RegistryHasDotNet10DesktopRuntime(const RootKey: HKEY): Boolean;
+function RegistryHasDotNet10DesktopRuntime(const RootKey: Integer): Boolean;
 var
   Versions: TArrayOfString;
   I: Integer;

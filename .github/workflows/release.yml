@@ -124,11 +124,11 @@ jobs:
         shell: pwsh
         run: |
           $candidates = @(
-            "${env:ProgramFiles(x86)}\Inno Setup 7\ISCC.exe",
-            "$env:ProgramFiles\Inno Setup 7\ISCC.exe"
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
           )
           $iscc = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-          if (-not $iscc) { throw 'Inno Setup 7 is not available on this runner.' }
+          if (-not $iscc) { throw 'Inno Setup 6 is not available on this runner.' }
           "path=$iscc" >> $env:GITHUB_OUTPUT
 
       - name: Build installer
