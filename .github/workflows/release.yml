@@ -53,8 +53,18 @@ jobs:
         run: |
           $tag = '${{ steps.version.outputs.tag }}'
           git fetch origin --tags --force
-          $existingCommit = git rev-list -n 1 $tag 2>$null
-          if ($LASTEXITCODE -eq 0 -and $existingCommit) {
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Failed to fetch release tags from origin.'
+          }
+          $existingTag = git tag --list $tag
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to check whether tag $tag exists."
+          }
+          if ($existingTag) {
+            $existingCommit = git rev-list -n 1 $tag
+            if ($LASTEXITCODE -ne 0 -or -not $existingCommit) {
+              throw "Failed to resolve existing tag $tag."
+            }
             if ($existingCommit.Trim() -ne $env:GITHUB_SHA) {
               throw "Tag $tag already points to $existingCommit instead of $env:GITHUB_SHA."
             }
