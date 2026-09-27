@@ -263,6 +263,8 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             var existing = DiscoveredServices.FirstOrDefault(x => x.Identity.StableKey == service.Identity.StableKey);
             if (existing is not null) DiscoveredServices.Remove(existing);
             DiscoveredServices.Add(service);
+            if (existing is null && VrChatNodeMetadata.IsVrChatServiceName(service.Identity.Name))
+                AddSystem(SystemLevel.Info, $"VRChatを検出しました: {service.Identity.Name} ({service.HttpEndpoint})");
             if (SelectedService is null && service.Identity.StableKey == _settings.LastServiceKey)
                 SelectedService = service;
         });
