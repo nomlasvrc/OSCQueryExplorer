@@ -64,6 +64,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     private TypeDisplayFormat? _renderedTypeDisplay;
     private long _lastRenderedHistoryId;
     private bool _localSnapshotDirty;
+    private bool _isVrChatService;
     private long _nextLocalSnapshotRefresh;
 
     public ObservableCollection<OscNode> RootNodes { get; } = [];
@@ -83,7 +84,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     public string LogFilter { get => _logFilter; set { if (Set(ref _logFilter, value)) RefreshLog(); } }
     public string Status { get => _status; private set => Set(ref _status, value); }
     public double LogFontSize => _settings.LogFontSize;
-    public string AppVersion => typeof(MainViewModel).Assembly.GetName().Version?.ToString(3) ?? "0.1.1";
+    public string? AppVersion => typeof(MainViewModel).Assembly.GetName().Version?.ToString(3);
     public bool IsConnected { get => _isConnected; private set { if (Set(ref _isConnected, value)) Raise(nameof(IsDisconnected)); } }
     public bool IsDisconnected => !IsConnected;
     public bool IsPaused { get => _isPaused; set { if (Set(ref _isPaused, value) && !value) RefreshLog(); } }
@@ -295,7 +296,9 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             if (!Uri.TryCreate(ManualUrl, UriKind.Absolute, out var endpoint) || (endpoint.Scheme != "http" && endpoint.Scheme != "https"))
                 throw new ArgumentException("有効なHTTP/HTTPSのOSCQuery URLを入力してください。");
 
+            var isVrChatService = IsVrChatEndpoint(endpoint);
             await DisconnectCoreAsync();
+            _isVrChatService = isVrChatService;
             _connectionCts = new();
             connectionToken = _connectionCts.Token;
             _endpoint = endpoint; Status = "接続中…";
@@ -349,6 +352,26 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
 
     private static string ServiceStateKey(Uri endpoint) => endpoint.AbsoluteUri.TrimEnd('/').ToUpperInvariant();
 
+    private bool IsVrChatEndpoint(Uri endpoint)
+    {
+        if (SelectedService is { } selected &&
+            SameEndpoint(selected.HttpEndpoint, endpoint) &&
+            VrChatNodeMetadata.IsVrChatServiceName(selected.Identity.Name))
+            return true;
+
+        return DiscoveredServices.Any(service =>
+            SameEndpoint(service.HttpEndpoint, endpoint) &&
+            VrChatNodeMetadata.IsVrChatServiceName(service.Identity.Name));
+    }
+
+    private static bool SameEndpoint(Uri left, Uri right) =>
+        Uri.Compare(
+            left,
+            right,
+            UriComponents.SchemeAndServer | UriComponents.Path,
+            UriFormat.SafeUnescaped,
+            StringComparison.OrdinalIgnoreCase) == 0;
+
     private static string DescribeConnectionError(Exception exception) => exception switch
     {
         ArgumentException => exception.Message,
@@ -389,6 +412,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         cancellationToken.ThrowIfCancellationRequested();
         TreeUpdating?.Invoke(this, EventArgs.Empty);
         var structureChanged = _tree.ReplaceRemoteTree(root);
+        if (_isVrChatService) VrChatNodeMetadata.ApplyDescriptions(_tree.Root);
         _localServer?.UpdateTree(_tree.Root);
         _localSnapshotDirty = false;
         if (structureChanged)
@@ -419,7 +443,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         _udp.CloseSockets();
         _query.AbortWebSocket();
         if (IsConnected) AddSystem(SystemLevel.Info, "切断しました。");
-        IsConnected = false; Status = "未接続"; _endpoint = null; _hostInfo = null; CommandsChanged();
+        IsConnected = false; Status = "未接続"; _endpoint = null; _hostInfo = null; _isVrChatService = false; CommandsChanged();
         var server = _localServer;
         _localServer = null;
         _discovery.StopAdvertising();
@@ -576,7 +600,16 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             var range = editorIndex < node.Ranges.Count ? node.Ranges[editorIndex] : null;
             var hasRange = SliderRangeResolver.TryResolve(_settings.SliderRanges, node.FullPath, tag, out var minimum, out var maximum)
                 || TryDouble(range?.Min, out minimum) && TryDouble(range?.Max, out maximum) && maximum > minimum;
-            var editor = new ArgumentEditorViewModel { Index = editorIndex, TypeTag = tag, DisplayFormat = TypeDisplay, HasSlider = hasRange && tag is 'i' or 'f' or 'h' or 'd', Minimum = minimum, Maximum = hasRange ? maximum : 1 };
+            var editor = new ArgumentEditorViewModel
+            {
+                Index = editorIndex,
+                TypeTag = tag,
+                Description = _isVrChatService ? VrChatNodeMetadata.GetArgumentDescription(node.FullPath, editorIndex) : null,
+                DisplayFormat = TypeDisplay,
+                HasSlider = hasRange && tag is 'i' or 'f' or 'h' or 'd',
+                Minimum = minimum,
+                Maximum = hasRange ? maximum : 1
+            };
             if (values is not null && editorIndex < values.Count) editor.SetValue(values[editorIndex]);
             result.Add(editor);
             editorIndex++;

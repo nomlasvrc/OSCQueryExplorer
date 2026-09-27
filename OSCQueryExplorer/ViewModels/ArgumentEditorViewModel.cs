@@ -12,6 +12,7 @@ public sealed class ArgumentEditorViewModel : ObservableObject
     private TypeDisplayFormat _displayFormat;
     public int Index { get; init; }
     public char TypeTag { get; init; }
+    public string? Description { get; init; }
     public string TypeLabel => OscTypeFormatter.Format(TypeTag.ToString(), DisplayFormat);
     public TypeDisplayFormat DisplayFormat
     {

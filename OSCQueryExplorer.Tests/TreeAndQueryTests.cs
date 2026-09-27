@@ -8,6 +8,46 @@ namespace OSCQueryExplorer.Tests;
 
 public sealed class TreeAndQueryTests
 {
+    [Theory]
+    [InlineData("VRChat-Client-a1B2c3", true)]
+    [InlineData("vrchat-client-ABC123", true)]
+    [InlineData("VRChat-Client-ABC12", false)]
+    [InlineData("VRChat-Client-ABC1234", false)]
+    [InlineData("VRChat-Client-ABC-12", false)]
+    [InlineData("Other-Client-ABC123", false)]
+    public void VrChatServiceName_RequiresSixAlphanumericCharacters(string name, bool expected)
+    {
+        Assert.Equal(expected, VrChatNodeMetadata.IsVrChatServiceName(name));
+    }
+
+    [Fact]
+    public void VrChatDescriptions_AnnotateKnownNodesWithoutOverwritingRemoteMetadata()
+    {
+        var root = new OscNode { FullPath = "/" };
+        var chatbox = new OscNode { FullPath = "/chatbox" };
+        chatbox.Children.Add(new OscNode { FullPath = "/chatbox/input", Description = "remote description" });
+        chatbox.Children.Add(new OscNode { FullPath = "/chatbox/typing" });
+        var parameters = new OscNode { FullPath = "/avatar/parameters" };
+        parameters.Children.Add(new OscNode { FullPath = "/avatar/parameters/MyToggle" });
+        root.Children.Add(chatbox);
+        root.Children.Add(parameters);
+
+        VrChatNodeMetadata.ApplyDescriptions(root);
+
+        Assert.Equal("remote description", chatbox.Children[0].Description);
+        Assert.Contains("入力中インジケーター", chatbox.Children[1].Description);
+        Assert.Contains("MyToggle", parameters.Children[0].Description);
+    }
+
+    [Fact]
+    public void VrChatArgumentDescriptions_DescribeEachChatboxInputController()
+    {
+        Assert.Contains("テキスト", VrChatNodeMetadata.GetArgumentDescription("/chatbox/input", 0));
+        Assert.Contains("即時送信", VrChatNodeMetadata.GetArgumentDescription("/chatbox/input", 1));
+        Assert.Contains("通知音", VrChatNodeMetadata.GetArgumentDescription("/chatbox/input", 2));
+        Assert.Null(VrChatNodeMetadata.GetArgumentDescription("/chatbox/input", 3));
+    }
+
     [Fact]
     public void CustomNode_ReturnsAfterRemoteNodeDisappears()
     {
