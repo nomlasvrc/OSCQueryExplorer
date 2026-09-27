@@ -108,7 +108,12 @@
                 <Grid>
                   <Grid.ContextMenu><ContextMenu><MenuItem Header="ピン留め / 解除" Click="NodePin_Click" /><MenuItem Header="OSCQuery公開 ON/OFF" Click="NodePublish_Click" /><Separator /><MenuItem Header="アドレスをコピー" Click="NodeCopy_Click" /></ContextMenu></Grid.ContextMenu>
                   <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                  <Border Width="6" Height="6" CornerRadius="3" VerticalAlignment="Center" Margin="1,0,7,0" Background="{StaticResource ExplorerAccentBrush}" Opacity="0.55" />
+                  <Border Width="6" Height="6" CornerRadius="3" VerticalAlignment="Center" Margin="1,0,7,0" Opacity="0.55">
+                    <Border.Style><Style TargetType="Border">
+                      <Setter Property="Background" Value="{StaticResource ExplorerAccentBrush}" />
+                      <Style.Triggers><DataTrigger Binding="{Binding IsPublished}" Value="False"><Setter Property="Background" Value="White" /></DataTrigger></Style.Triggers>
+                    </Style></Border.Style>
+                  </Border>
                   <TextBlock Grid.Column="1" Text="{Binding Name}" FontFamily="Cascadia Mono,Consolas" TextWrapping="NoWrap"
                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
                   <ui:SymbolIcon Grid.Column="2" Symbol="Pin24" FontSize="12" Foreground="{StaticResource PinnedAccentBrush}" Visibility="{Binding IsPinned, Converter={StaticResource BooleanToVisibilityConverter}}" Margin="7,0,0,0" />
