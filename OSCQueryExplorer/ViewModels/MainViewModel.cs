@@ -83,7 +83,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     public string LogFilter { get => _logFilter; set { if (Set(ref _logFilter, value)) RefreshLog(); } }
     public string Status { get => _status; private set => Set(ref _status, value); }
     public double LogFontSize => _settings.LogFontSize;
-    public string AppVersion => typeof(MainViewModel).Assembly.GetName().Version?.ToString(3) ?? "0.1.0";
+    public string AppVersion => typeof(MainViewModel).Assembly.GetName().Version?.ToString(3) ?? "0.1.1";
     public bool IsConnected { get => _isConnected; private set { if (Set(ref _isConnected, value)) Raise(nameof(IsDisconnected)); } }
     public bool IsDisconnected => !IsConnected;
     public bool IsPaused { get => _isPaused; set { if (Set(ref _isPaused, value) && !value) RefreshLog(); } }
