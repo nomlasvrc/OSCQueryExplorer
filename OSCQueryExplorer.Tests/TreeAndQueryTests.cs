@@ -79,11 +79,12 @@ public sealed class TreeAndQueryTests
     public void UdpValue_IsNotRewoundByAutomaticHttpValue()
     {
         var tree = new NodeTree();
+        var udpReceivedAt = DateTimeOffset.UtcNow;
         var old = new OscNode { FullPath = "/" };
-        old.Children.Add(new OscNode { FullPath = "/x", Observed = new() { Origin = ValueOrigin.UdpReceived, UpdatedAt = DateTimeOffset.UtcNow, Values = [new(OscValueKind.Int32, 2)] } });
+        old.Children.Add(new OscNode { FullPath = "/x", Observed = new() { Origin = ValueOrigin.UdpReceived, UpdatedAt = udpReceivedAt, Values = [new(OscValueKind.Int32, 2)] } });
         tree.ReplaceRemoteTree(old);
         var refreshed = new OscNode { FullPath = "/" };
-        refreshed.Children.Add(new OscNode { FullPath = "/x", Observed = new() { Origin = ValueOrigin.OscQuery, UpdatedAt = DateTimeOffset.UtcNow.AddSeconds(-1), Values = [new(OscValueKind.Int32, 1)] } });
+        refreshed.Children.Add(new OscNode { FullPath = "/x", Observed = new() { Origin = ValueOrigin.OscQuery, UpdatedAt = udpReceivedAt.AddSeconds(1), Values = [new(OscValueKind.Int32, 1)] } });
         tree.ReplaceRemoteTree(refreshed);
         Assert.Equal(2, tree.Find("/x")!.Observed!.Values[0].Value);
     }

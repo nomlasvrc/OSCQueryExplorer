@@ -115,7 +115,9 @@ public sealed class NodeTree
     }
 
     private static ObservedValue? PreferObserved(ObservedValue? oldValue, ObservedValue? incoming) =>
-        oldValue?.Origin == ValueOrigin.UdpReceived && incoming?.Origin == ValueOrigin.OscQuery && oldValue.UpdatedAt >= incoming.UpdatedAt ? oldValue : incoming ?? oldValue;
+        oldValue?.Origin == ValueOrigin.UdpReceived && incoming?.Origin == ValueOrigin.OscQuery
+            ? oldValue
+            : incoming ?? oldValue;
 
     private static bool HasSameStructure(OscNode current, OscNode incoming)
     {
