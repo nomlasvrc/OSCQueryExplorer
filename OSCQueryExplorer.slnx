@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="OSCQueryExplorer/OSCQueryExplorer.csproj" />
+  <Project Path="OSCQueryExplorer.Core/OSCQueryExplorer.Core.csproj" />
+  <Project Path="OSCQueryExplorer.Protocol/OSCQueryExplorer.Protocol.csproj" />
+  <Project Path="OSCQueryExplorer.Tests/OSCQueryExplorer.Tests.csproj" />
+</Solution>

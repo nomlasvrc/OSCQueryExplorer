@@ -1,0 +1,130 @@
+<ui:FluentWindow x:Class="OSCQueryExplorer.SliderRangeSettingsWindow"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+  Title="スライダー範囲設定" Width="820" Height="740" MinWidth="700" MinHeight="560"
+  WindowStartupLocation="CenterOwner">
+  <Grid Margin="22">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <StackPanel>
+      <TextBlock Text="スライダー範囲" FontSize="24" FontWeight="SemiBold" />
+      <TextBlock Text="OSCパスを選び、そのパスと子孫に適用する範囲を設定します。" Margin="0,7,0,0"
+             Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+    </StackPanel>
+
+    <Border Grid.Row="1" Margin="0,16,0,12" Padding="12,9" CornerRadius="8"
+        Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+      <TextBlock Text="最も深く具体的なパスが優先されます。型が一致しない場合は上位設定、次にOSCQueryのRANGEを使用します。"
+             TextWrapping="Wrap" FontSize="11" />
+    </Border>
+
+    <Grid Grid.Row="2">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="310" />
+        <ColumnDefinition Width="10" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+
+      <Border Style="{StaticResource PaneSurface}">
+        <DockPanel>
+          <Border DockPanel.Dock="Top" Style="{StaticResource PaneHeader}" Padding="10">
+            <StackPanel>
+              <TextBlock Text="OSCパス" Style="{StaticResource PaneTitle}" />
+              <Grid Margin="0,8,0,0">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <TextBox x:Name="NewPathBox" VerticalContentAlignment="Center" ToolTip="現在のツリーにないパスも追加できます" />
+                <ui:Button Grid.Column="1" Content="追加" Click="AddPath_Click" Margin="7,0,0,0" Padding="10,4" />
+              </Grid>
+            </StackPanel>
+          </Border>
+          <TreeView x:Name="RulesTree" ItemsSource="{Binding RootNodes}" SelectedItemChanged="RulesTree_SelectedItemChanged"
+                BorderThickness="0" Background="Transparent" Padding="7,5"
+                ScrollViewer.HorizontalScrollBarVisibility="Auto">
+            <TreeView.ItemContainerStyle>
+              <Style TargetType="TreeViewItem">
+                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+                <Setter Property="Padding" Value="3,4" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+              </Style>
+            </TreeView.ItemContainerStyle>
+            <TreeView.ItemTemplate>
+              <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                <Border Background="{Binding RuleBackground}" CornerRadius="6" Padding="5,3">
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <Border Width="7" Height="7" CornerRadius="4" Margin="0,0,7,0" VerticalAlignment="Center" Background="{Binding RuleColor}" />
+                    <TextBlock Grid.Column="1" Text="{Binding Name}" FontFamily="Cascadia Mono,Consolas"
+                        Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                    <Border Grid.Column="2" Margin="7,0,0,0" Padding="5,1" CornerRadius="5" Background="{Binding RuleColor}"
+                        Visibility="{Binding HasEffectiveRule, Converter={StaticResource BooleanToVisibilityConverter}}">
+                      <TextBlock Text="{Binding RuleBadgeText}" FontSize="8" FontWeight="SemiBold" Foreground="White" />
+                    </Border>
+                  </Grid>
+                </Border>
+              </HierarchicalDataTemplate>
+            </TreeView.ItemTemplate>
+          </TreeView>
+        </DockPanel>
+      </Border>
+
+      <GridSplitter Grid.Column="1" Style="{StaticResource Splitter}" Width="10" HorizontalAlignment="Stretch" />
+
+      <Border Grid.Column="2" Style="{StaticResource PaneSurface}" Padding="18">
+        <Grid>
+          <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="10" /><RowDefinition Height="165" /></Grid.RowDefinitions>
+          <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel x:Name="EditorPanel">
+              <TextBlock Text="選択パス" Style="{StaticResource Eyebrow}" />
+              <TextBlock Text="{Binding FullPath, TargetNullValue=左のツリーからパスを選択してください}" Margin="0,5,0,18"
+                     FontSize="16" FontWeight="SemiBold" FontFamily="Cascadia Mono,Consolas" TextWrapping="Wrap" />
+              <CheckBox Content="このパスに範囲を設定" IsChecked="{Binding HasRule}" FontWeight="SemiBold" />
+              <StackPanel Margin="0,16,0,0" IsEnabled="{Binding HasRule}">
+                <TextBlock Text="範囲" Style="{StaticResource Eyebrow}" Margin="0,0,0,7" />
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="16" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                  <StackPanel><TextBlock Text="最小値" FontSize="11" Foreground="{DynamicResource TextFillColorSecondaryBrush}" /><TextBox Text="{Binding Minimum, UpdateSourceTrigger=LostFocus}" Margin="0,5,0,0" /></StackPanel>
+                  <StackPanel Grid.Column="2"><TextBlock Text="最大値" FontSize="11" Foreground="{DynamicResource TextFillColorSecondaryBrush}" /><TextBox Text="{Binding Maximum, UpdateSourceTrigger=LostFocus}" Margin="0,5,0,0" /></StackPanel>
+                </Grid>
+                <TextBlock Text="適用するOSC型" Style="{StaticResource Eyebrow}" Margin="0,20,0,8" />
+                <WrapPanel>
+                  <CheckBox Content="i  Int32" IsChecked="{Binding AppliesInt32}" Margin="0,0,18,8" />
+                  <CheckBox Content="f  Float32" IsChecked="{Binding AppliesFloat32}" Margin="0,0,18,8" />
+                  <CheckBox Content="h  Int64" IsChecked="{Binding AppliesInt64}" Margin="0,0,18,8" />
+                  <CheckBox Content="d  Float64" IsChecked="{Binding AppliesFloat64}" Margin="0,0,0,8" />
+                </WrapPanel>
+              </StackPanel>
+            </StackPanel>
+          </ScrollViewer>
+          <Border Grid.Row="1" Height="1" Background="{DynamicResource ControlElevationBorderBrush}" VerticalAlignment="Center" />
+          <DockPanel Grid.Row="2">
+            <TextBlock DockPanel.Dock="Top" Text="設定一覧" Style="{StaticResource Eyebrow}" Margin="0,2,0,7" />
+            <ListBox ItemsSource="{Binding ConfiguredRules}" SelectionChanged="ConfiguredRules_SelectionChanged" BorderThickness="0" Background="Transparent" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+              <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem"><Setter Property="HorizontalContentAlignment" Value="Stretch" /><Setter Property="Padding" Value="0" /><Setter Property="Margin" Value="0,0,0,5" /></Style></ListBox.ItemContainerStyle>
+              <ListBox.ItemTemplate><DataTemplate>
+                <Border Background="{Binding RuleBackground}" CornerRadius="7" Padding="8,6">
+                  <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="7" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <Border Background="{Binding RuleColor}" CornerRadius="4" />
+                    <StackPanel Grid.Column="1" Margin="8,0"><TextBlock Text="{Binding FullPath}" FontFamily="Cascadia Mono,Consolas" FontSize="10" TextTrimming="CharacterEllipsis" /><TextBlock Text="{Binding TypeTagsLabel}" FontSize="9" Foreground="{DynamicResource TextFillColorSecondaryBrush}" /></StackPanel>
+                    <TextBlock Grid.Column="2" Text="{Binding RangeLabel}" FontFamily="Cascadia Mono,Consolas" FontSize="10" VerticalAlignment="Center" />
+                  </Grid>
+                </Border>
+              </DataTemplate></ListBox.ItemTemplate>
+            </ListBox>
+          </DockPanel>
+        </Grid>
+      </Border>
+    </Grid>
+
+    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+      <ui:Button Content="キャンセル" Click="Cancel_Click" Margin="0,0,8,0" />
+      <ui:Button Content="保存" Appearance="Primary" Click="Save_Click" />
+    </StackPanel>
+  </Grid>
+</ui:FluentWindow>

@@ -1,0 +1,493 @@
+<ui:FluentWindow x:Class="OSCQueryExplorer.MainWindow"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+  mc:Ignorable="d" Title="OSCQuery Explorer" Width="1500" Height="940"
+  MinWidth="1180" MinHeight="720" WindowStartupLocation="CenterScreen">
+  <Grid Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="64" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="8" />
+      <RowDefinition x:Name="LogRow" Height="230" />
+    </Grid.RowDefinitions>
+
+    <ui:TitleBar Grid.Row="0" Title="OSCQuery Explorer" ShowMinimize="True" ShowMaximize="True" ShowClose="True">
+      <ui:TitleBar.Header>
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+          <Border Width="8" Height="8" CornerRadius="4" Background="{StaticResource ExplorerAccentBrush}" Margin="0,0,9,0" />
+          <TextBlock Text="OSCQuery Explorer" FontWeight="SemiBold" />
+          <Border Margin="10,0,0,0" Padding="7,2" CornerRadius="8" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+            <TextBlock Text="{Binding AppVersion}" FontSize="10" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+          </Border>
+        </StackPanel>
+      </ui:TitleBar.Header>
+    </ui:TitleBar>
+
+    <Border Grid.Row="1" Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+        BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="0,0,0,1">
+      <Grid Margin="16,9">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+          <Border Padding="10,6" CornerRadius="16" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+            <StackPanel Orientation="Horizontal">
+              <Border Width="9" Height="9" CornerRadius="5" VerticalAlignment="Center" Margin="0,0,8,0">
+                <Border.Style><Style TargetType="Border">
+                  <Setter Property="Background" Value="#94A3B8" />
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsConnected}" Value="True"><Setter Property="Background" Value="#22C55E" /></DataTrigger>
+                    <DataTrigger Binding="{Binding IsConnecting}" Value="True"><Setter Property="Background" Value="#F59E0B" /></DataTrigger>
+                    <DataTrigger Binding="{Binding HasConnectionError}" Value="True"><Setter Property="Background" Value="#EF4444" /></DataTrigger>
+                  </Style.Triggers>
+                </Style></Border.Style>
+              </Border>
+              <TextBlock Text="{Binding Status}" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold" />
+            </StackPanel>
+          </Border>
+          <ui:Button Style="{StaticResource ToolIconButton}" Icon="{ui:SymbolIcon ArrowClockwise24}" Command="{Binding ReconnectCommand}"
+                 Foreground="{StaticResource ParameterAccentBrush}" ToolTip="再接続" AutomationProperties.Name="再接続" Margin="6,0,0,0" />
+          <ui:Button Style="{StaticResource ToolIconButton}" Icon="{ui:SymbolIcon PlugDisconnected24}" Command="{Binding DisconnectCommand}"
+                 Foreground="#EF4444" Background="#18EF4444" BorderBrush="#55EF4444"
+                 ToolTip="切断" AutomationProperties.Name="切断" Margin="3,0,0,0" />
+          <Border Width="1" Height="25" Background="{DynamicResource ControlElevationBorderBrush}" Margin="12,0" />
+          <TextBlock Text="OSCQuery ワークスペース" Style="{StaticResource Eyebrow}" VerticalAlignment="Center" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal">
+          <CheckBox Content="即時送信" IsChecked="{Binding SendImmediately}" VerticalAlignment="Center" Margin="0,0,12,0" />
+          <TextBlock Text="型表示" Style="{StaticResource Eyebrow}" VerticalAlignment="Center" Margin="0,0,6,0" />
+          <ComboBox Width="104" ItemsSource="{Binding TypeDisplayOptions}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                SelectedValue="{Binding TypeDisplay, Mode=TwoWay}" VerticalContentAlignment="Center" Margin="0,0,8,0" />
+          <ui:Button Content="スライダー範囲設定" Click="SliderRangeSettings_Click" Margin="3,0" />
+          <ui:Button Content="カスタムノードを追加" Click="AddCustomNode_Click" Margin="3,0" />
+          <ui:Button Content="接続先変更" Click="ShowConnection_Click" Margin="3,0,0,0" />
+          <ui:Button Style="{StaticResource ToolIconButton}" Icon="{ui:SymbolIcon Settings24}" Click="Settings_Click" ToolTip="設定" AutomationProperties.Name="設定" Margin="3,0" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="2" Margin="12,12,12,0">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition x:Name="ExplorerColumn" Width="270" MinWidth="190" />
+        <ColumnDefinition Width="8" />
+        <ColumnDefinition x:Name="InspectorColumn" Width="370" MinWidth="300" />
+        <ColumnDefinition Width="8" />
+        <ColumnDefinition x:Name="ParameterLogColumn" Width="*" MinWidth="260" />
+        <ColumnDefinition Width="8" />
+        <ColumnDefinition x:Name="PinnedColumn" Width="300" MinWidth="220" />
+      </Grid.ColumnDefinitions>
+
+      <!-- Explorer -->
+      <Border Grid.Column="0" Style="{StaticResource PaneSurface}">
+        <DockPanel>
+          <Border DockPanel.Dock="Top" Style="{StaticResource PaneHeader}">
+            <Grid>
+              <StackPanel Orientation="Horizontal">
+                <Border Style="{StaticResource IconTile}" Background="#1A6C63FF">
+                  <ui:SymbolIcon Symbol="FolderOpen24" Foreground="{StaticResource ExplorerAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <StackPanel><TextBlock Text="エクスプローラー" Style="{StaticResource PaneTitle}" /><TextBlock Text="アドレス空間" Style="{StaticResource Eyebrow}" /></StackPanel>
+              </StackPanel>
+              <ui:Button HorizontalAlignment="Right" Style="{StaticResource ToolIconButton}" Icon="{ui:SymbolIcon ArrowClockwise24}" Command="{Binding RefreshTreeCommand}" ToolTip="再読み込み" />
+            </Grid>
+          </Border>
+          <ui:TextBox DockPanel.Dock="Top" Margin="10,10,10,6" Text="{Binding TreeSearch, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="OSCアドレスを検索" />
+          <TreeView x:Name="ExplorerTree" ItemsSource="{Binding RootNodes}" SelectedItemChanged="Tree_SelectedItemChanged" Style="{StaticResource DenseTree}">
+            <TreeView.ItemContainerStyle>
+              <Style TargetType="TreeViewItem">
+                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+                <Setter Property="Padding" Value="3,4" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+              </Style>
+            </TreeView.ItemContainerStyle>
+            <TreeView.ItemTemplate>
+              <HierarchicalDataTemplate ItemsSource="{Binding DisplayChildren}">
+                <Grid>
+                  <Grid.ContextMenu><ContextMenu><MenuItem Header="ピン留め / 解除" Click="NodePin_Click" /><MenuItem Header="OSCQuery公開 ON/OFF" Click="NodePublish_Click" /><Separator /><MenuItem Header="アドレスをコピー" Click="NodeCopy_Click" /></ContextMenu></Grid.ContextMenu>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                  <Border Width="6" Height="6" CornerRadius="3" VerticalAlignment="Center" Margin="1,0,7,0" Background="{StaticResource ExplorerAccentBrush}" Opacity="0.55" />
+                  <TextBlock Grid.Column="1" Text="{Binding Name}" FontFamily="Cascadia Mono,Consolas" TextWrapping="NoWrap"
+                      Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                  <ui:SymbolIcon Grid.Column="2" Symbol="Pin24" FontSize="12" Foreground="{StaticResource PinnedAccentBrush}" Visibility="{Binding IsPinned, Converter={StaticResource BooleanToVisibilityConverter}}" Margin="7,0,0,0" />
+                </Grid>
+              </HierarchicalDataTemplate>
+            </TreeView.ItemTemplate>
+          </TreeView>
+        </DockPanel>
+      </Border>
+      <GridSplitter Grid.Column="1" Style="{StaticResource Splitter}" Width="8" HorizontalAlignment="Stretch" />
+
+      <!-- Inspector -->
+      <Border Grid.Column="2" Style="{StaticResource PaneSurface}">
+        <DockPanel>
+          <Border DockPanel.Dock="Top" Style="{StaticResource PaneHeader}">
+            <Grid>
+              <StackPanel Orientation="Horizontal">
+                <Border Style="{StaticResource IconTile}" Background="#1A0EA5E9">
+                  <ui:SymbolIcon Symbol="Code24" Foreground="{StaticResource InspectorAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <StackPanel><TextBlock Text="インスペクター" Style="{StaticResource PaneTitle}" /><TextBlock Text="選択ノード" Style="{StaticResource Eyebrow}" /></StackPanel>
+              </StackPanel>
+              <ui:Button HorizontalAlignment="Right" Content="ピン留め" Command="{Binding PinCommand}" Padding="12,5" />
+            </Grid>
+          </Border>
+          <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="13">
+              <TextBlock Text="フルOSCアドレス" Style="{StaticResource Eyebrow}" />
+              <TextBlock Text="{Binding SelectedNode.FullPath, TargetNullValue=エクスプローラーからノードを選択してください}"
+                     FontSize="17" FontWeight="SemiBold" FontFamily="Cascadia Mono,Consolas"
+                     TextWrapping="Wrap" Margin="0,6,0,14" />
+
+              <Border Style="{StaticResource SectionCard}" Margin="0,0,0,10">
+                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="4" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                  <Border Background="{StaticResource InspectorAccentBrush}" CornerRadius="2" />
+                  <StackPanel Grid.Column="1" Margin="13,0,0,0">
+                    <TextBlock Text="現在値" Style="{StaticResource Eyebrow}" />
+                    <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left" MaxWidth="320" Margin="0,7,0,5">
+                      <TextBlock Text="{Binding SelectedValueText}" FontSize="28" FontWeight="SemiBold" TextWrapping="NoWrap" />
+                    </Viewbox>
+                    <TextBlock Text="{Binding SelectedValueStatus}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="11" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+
+              <Border Style="{StaticResource SectionCard}" Margin="0,0,0,10">
+                <StackPanel>
+                  <Grid Margin="0,0,0,10"><TextBlock Text="コントローラー" Style="{StaticResource Eyebrow}" /><StackPanel HorizontalAlignment="Right" Orientation="Horizontal"><TextBlock Text="読み取り専用" FontSize="9" FontWeight="Bold" Foreground="{StaticResource PinnedAccentBrush}" Visibility="{Binding IsSelectedNodeReadOnly, Converter={StaticResource BooleanToVisibilityConverter}}" Margin="0,0,8,0" /><TextBlock Text="Live" FontSize="9" FontWeight="Bold" Foreground="{StaticResource ParameterAccentBrush}" /></StackPanel></Grid>
+                  <ItemsControl ItemsSource="{Binding ArgumentEditors}" IsEnabled="{Binding IsSelectedNodeWritable}">
+                    <ItemsControl.ItemTemplate><DataTemplate>
+                      <Grid Margin="0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="58" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                        <Border Padding="6,3" CornerRadius="6" Background="{DynamicResource ControlFillColorSecondaryBrush}" HorizontalAlignment="Left"><TextBlock Text="{Binding TypeLabel}" FontSize="10" Foreground="{DynamicResource TextFillColorSecondaryBrush}" /></Border>
+                        <ui:TextBox Grid.Column="1" Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" LostKeyboardFocus="Argument_LostKeyboardFocus" KeyDown="Argument_KeyDown"><ui:TextBox.Style><Style TargetType="ui:TextBox" BasedOn="{StaticResource ArgumentTextBox}"><Style.Triggers><DataTrigger Binding="{Binding IsBoolean}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger><DataTrigger Binding="{Binding HasSlider}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></ui:TextBox.Style></ui:TextBox>
+                        <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding Boolean}" Style="{StaticResource BooleanToggleSwitch}" Click="ArgumentToggle_Click" />
+                        <Grid Grid.Column="1"><Grid.Style><Style TargetType="Grid"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding HasSlider}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></Grid.Style>
+                          <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="64" /></Grid.ColumnDefinitions>
+                          <Slider Minimum="{Binding Minimum}" Maximum="{Binding Maximum}" Value="{Binding NumericValue, Mode=TwoWay}" TickFrequency="{Binding TickFrequency}" PreviewMouseLeftButtonUp="ArgumentSlider_MouseUp" Margin="0,0,8,0" />
+                          <ui:TextBox Grid.Column="1" Style="{StaticResource ArgumentTextBox}" Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" LostKeyboardFocus="Argument_LostKeyboardFocus" KeyDown="Argument_KeyDown" Padding="4,2" />
+                        </Grid>
+                      </Grid>
+                    </DataTemplate></ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <Grid Margin="0,11,0,0"><ui:Button Content="送信" Command="{Binding SendCommand}" IsEnabled="{Binding IsSelectedNodeWritable}" Appearance="Primary" HorizontalAlignment="Right" Padding="16,6" /></Grid>
+                </StackPanel>
+              </Border>
+
+              <Border Style="{StaticResource SectionCard}" Margin="0,0,0,10">
+                <StackPanel><TextBlock Text="メタデータ" Style="{StaticResource Eyebrow}" Margin="0,0,0,10" />
+                  <ItemsControl ItemsSource="{Binding SelectedMetadata}">
+                    <ItemsControl.ItemTemplate><DataTemplate>
+                      <Grid Margin="0,5"><Grid.ColumnDefinitions><ColumnDefinition Width="92" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding Label}" Style="{StaticResource Eyebrow}" />
+                        <TextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" FontFamily="Cascadia Mono,Consolas" />
+                      </Grid>
+                    </DataTemplate></ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Border>
+            </StackPanel>
+          </ScrollViewer>
+        </DockPanel>
+      </Border>
+      <GridSplitter Grid.Column="3" Style="{StaticResource Splitter}" Width="8" HorizontalAlignment="Stretch" />
+
+      <!-- Parameter log -->
+      <Border Grid.Column="4" Style="{StaticResource PaneSurface}">
+        <DockPanel>
+          <Border DockPanel.Dock="Top" Style="{StaticResource PaneHeader}">
+            <Grid>
+              <StackPanel Orientation="Horizontal">
+                <Border Style="{StaticResource IconTile}" Background="#1A10B981"><ui:SymbolIcon Symbol="Pulse24" Foreground="{StaticResource ParameterAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                <StackPanel><TextBlock Text="パラメーターログ" Style="{StaticResource PaneTitle}" /><TextBlock Text="選択ノード + 子孫" Style="{StaticResource Eyebrow}" /></StackPanel>
+              </StackPanel>
+              <Border HorizontalAlignment="Right" VerticalAlignment="Center" Padding="8,3" CornerRadius="9" Background="#1A10B981"><TextBlock Text="OSCのみ" FontSize="9" FontWeight="Bold" Foreground="{StaticResource ParameterAccentBrush}" /></Border>
+            </Grid>
+          </Border>
+          <ListBox x:Name="ParameterLogList" ItemsSource="{Binding ParameterLog}" Style="{StaticResource LogList}" FontSize="{Binding LogFontSize}" SelectionMode="Extended"><ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding DisplayText}" TextWrapping="NoWrap" Foreground="{DynamicResource TextFillColorPrimaryBrush}" /></DataTemplate></ListBox.ItemTemplate></ListBox>
+        </DockPanel>
+      </Border>
+      <GridSplitter Grid.Column="5" Style="{StaticResource Splitter}" Width="8" HorizontalAlignment="Stretch" />
+
+      <!-- Pinned -->
+      <Border Grid.Column="6" Style="{StaticResource PaneSurface}">
+        <DockPanel>
+          <Border DockPanel.Dock="Top" Style="{StaticResource PaneHeader}">
+            <StackPanel Orientation="Horizontal">
+              <Border Style="{StaticResource IconTile}" Background="#1AF59E0B"><ui:SymbolIcon Symbol="Pin24" Foreground="{StaticResource PinnedAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+              <StackPanel><TextBlock Text="ピン留め" Style="{StaticResource PaneTitle}" /><TextBlock Text="ドラッグで並べ替え" Style="{StaticResource Eyebrow}" /></StackPanel>
+            </StackPanel>
+          </Border>
+          <ListBox x:Name="PinnedList" ItemsSource="{Binding PinnedNodes}" ItemContainerStyle="{StaticResource PinnedListItem}" BorderThickness="0" Background="Transparent" Padding="0" Margin="0,12,0,4" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto" AllowDrop="True"
+               PreviewMouseLeftButtonDown="PinnedList_PreviewMouseLeftButtonDown" PreviewMouseLeftButtonUp="PinnedList_PreviewMouseLeftButtonUp" PreviewMouseMove="PinnedList_PreviewMouseMove" MouseLeave="PinnedList_MouseLeave"
+               DragOver="PinnedList_DragOver" Drop="PinnedList_Drop">
+            <ListBox.ItemTemplate><DataTemplate>
+              <Border Style="{StaticResource SectionCard}" Padding="9">
+                <StackPanel>
+                  <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="4" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <Border Background="{StaticResource PinnedAccentBrush}" CornerRadius="2" />
+                    <StackPanel Grid.Column="1" Margin="8,0"><TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12" /><TextBlock Text="{Binding FullPath}" FontSize="9" FontFamily="Cascadia Mono,Consolas" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorSecondaryBrush}" /></StackPanel>
+                    <ui:Button Grid.Column="2" Icon="{ui:SymbolIcon Dismiss20}" Click="PinnedUnpin_Click" Padding="4" ToolTip="ピン留めを解除" />
+                    <Border Grid.Column="3" Tag="PinnedDragHandle" Width="27" Height="27" Margin="5,0,0,0" CornerRadius="6"
+                        Background="{DynamicResource SubtleFillColorSecondaryBrush}" Cursor="SizeAll" ToolTip="ドラッグして並べ替え">
+                      <TextBlock Text="⠿" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    </Border>
+                  </Grid>
+                  <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left" MaxWidth="240" Margin="12,8,0,5">
+                    <TextBlock Text="{Binding ValueText}" FontSize="17" FontWeight="SemiBold" TextWrapping="NoWrap" />
+                  </Viewbox>
+                  <ItemsControl ItemsSource="{Binding Editors}" IsEnabled="{Binding CanControl}" Margin="12,0,0,0"><ItemsControl.ItemTemplate><DataTemplate>
+                    <Grid Margin="0,2"><Grid.ColumnDefinitions><ColumnDefinition Width="40" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                      <TextBlock Text="{Binding TypeLabel}" FontSize="8" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                      <ui:TextBox Grid.Column="1" Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" LostKeyboardFocus="PinnedEditor_LostKeyboardFocus" KeyDown="PinnedEditor_KeyDown"><ui:TextBox.Style><Style TargetType="ui:TextBox" BasedOn="{StaticResource ArgumentTextBox}"><Style.Triggers><DataTrigger Binding="{Binding IsBoolean}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger><DataTrigger Binding="{Binding HasSlider}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></ui:TextBox.Style></ui:TextBox>
+                      <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding Boolean}" Style="{StaticResource BooleanToggleSwitch}" Click="PinnedToggle_Click" />
+                      <Grid Grid.Column="1"><Grid.Style><Style TargetType="Grid"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding HasSlider}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></Grid.Style>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="58" /></Grid.ColumnDefinitions>
+                        <Slider Minimum="{Binding Minimum}" Maximum="{Binding Maximum}" Value="{Binding NumericValue, Mode=TwoWay}" TickFrequency="{Binding TickFrequency}" PreviewMouseLeftButtonUp="PinnedSlider_MouseUp" Margin="0,0,8,0" />
+                        <ui:TextBox Grid.Column="1" Style="{StaticResource ArgumentTextBox}" Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" LostKeyboardFocus="PinnedEditor_LostKeyboardFocus" KeyDown="PinnedEditor_KeyDown" Padding="4,2" />
+                      </Grid>
+                    </Grid>
+                  </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+                  <Grid Margin="12,5,0,0"><TextBlock Text="{Binding TypeLabel}" FontFamily="Cascadia Mono,Consolas" FontSize="9" Foreground="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" /><ui:Button Content="送信" Click="PinnedSend_Click" IsEnabled="{Binding CanControl}" Appearance="Primary" HorizontalAlignment="Right" Padding="10,3" /></Grid>
+                </StackPanel>
+              </Border>
+            </DataTemplate></ListBox.ItemTemplate>
+          </ListBox>
+        </DockPanel>
+      </Border>
+    </Grid>
+
+    <GridSplitter Grid.Row="3" Style="{StaticResource Splitter}" Height="8" HorizontalAlignment="Stretch" />
+
+    <!-- Shared log -->
+    <Border Grid.Row="4" Margin="12,0,12,12" Style="{StaticResource PaneSurface}">
+      <DockPanel>
+        <Border DockPanel.Dock="Top" Style="{StaticResource PaneHeader}" Padding="12,8">
+          <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <TextBlock Text="ログ" Style="{StaticResource PaneTitle}" Margin="2,0,12,0" />
+              <ToggleButton IsChecked="{Binding RecordOsc}" ToolTip="OSCを記録" AutomationProperties.Name="OSCを記録" Margin="2">
+                <ToggleButton.Style>
+                  <Style TargetType="ToggleButton" BasedOn="{StaticResource {x:Type ToggleButton}}">
+                    <Style.Triggers>
+                      <Trigger Property="IsChecked" Value="True">
+                        <Setter Property="Foreground" Value="#EF4444" />
+                        <Setter Property="Background" Value="#18EF4444" />
+                        <Setter Property="BorderBrush" Value="#55EF4444" />
+                      </Trigger>
+                    </Style.Triggers>
+                  </Style>
+                </ToggleButton.Style>
+                <ui:SymbolIcon Symbol="Record24" />
+              </ToggleButton>
+              <ui:Button Style="{StaticResource ToolIconButton}" Icon="{ui:SymbolIcon Delete24}" Command="{Binding ClearLogCommand}"
+                     Foreground="#F43F5E" Background="#18F43F5E" BorderBrush="#55F43F5E"
+                     ToolTip="ログを消去" AutomationProperties.Name="ログを消去" />
+              <Border Width="12" />
+              <ToggleButton IsChecked="{Binding IsPaused}" ToolTip="表示を一時停止" AutomationProperties.Name="表示を一時停止" Margin="2">
+                <ToggleButton.Style>
+                  <Style TargetType="ToggleButton" BasedOn="{StaticResource {x:Type ToggleButton}}">
+                    <Style.Triggers>
+                      <Trigger Property="IsChecked" Value="True">
+                        <Setter Property="Foreground" Value="#F59E0B" />
+                        <Setter Property="Background" Value="#18F59E0B" />
+                        <Setter Property="BorderBrush" Value="#55F59E0B" />
+                      </Trigger>
+                    </Style.Triggers>
+                  </Style>
+                </ToggleButton.Style>
+                <ui:SymbolIcon Symbol="Pause24" />
+              </ToggleButton>
+              <ToggleButton Content="自動スクロール" IsChecked="{Binding Follow}" Margin="2" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center">
+              <ui:TextBox Width="330" Text="{Binding LogFilter, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="フィルター… 例: addr:/avatar/ -Velocity" />
+              <ui:Button Style="{StaticResource ToolIconButton}" Icon="{ui:SymbolIcon QuestionCircle24}" ToolTip="Velocity  -Velocity  port:9001  src:9001  dst:9001  addr:/input/  type:f  level:ERROR" AutomationProperties.Name="検索ヘルプ" />
+            </StackPanel>
+            <ui:Button Grid.Column="2" Content="エクスポート" Click="Export_Click" HorizontalAlignment="Right" Margin="2,0" />
+          </Grid>
+        </Border>
+        <ListBox x:Name="GlobalLogList" ItemsSource="{Binding VisibleLog}" Style="{StaticResource LogList}" FontSize="{Binding LogFontSize}" SelectionMode="Extended"><ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding DisplayText}" TextWrapping="NoWrap" Foreground="{DynamicResource TextFillColorPrimaryBrush}" /></DataTemplate></ListBox.ItemTemplate></ListBox>
+      </DockPanel>
+    </Border>
+
+    <!-- Dedicated connection workspace -->
+    <Grid x:Name="ConnectionOverlay" Grid.Row="1" Grid.RowSpan="4" Panel.ZIndex="100" Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="0.9*" /><ColumnDefinition Width="1.1*" /></Grid.ColumnDefinitions>
+      <!-- Welcome / feature overview -->
+      <Ellipse Grid.ColumnSpan="2" Width="500" Height="440" HorizontalAlignment="Left" VerticalAlignment="Top"
+             Margin="-220,-240,0,0" Fill="#106C63FF" IsHitTestVisible="False" />
+      <Ellipse Grid.ColumnSpan="2" Width="220" Height="200" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+             Margin="0,0,-80,-100" Fill="#0D10B981" IsHitTestVisible="False" />
+      <Grid Grid.Column="0" Margin="60,28,24,28" ClipToBounds="True">
+        <Grid MaxWidth="520" VerticalAlignment="Center">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+
+          <Border HorizontalAlignment="Left" Padding="10,5" CornerRadius="12"
+              Background="#146C63FF" BorderBrush="#406C63FF" BorderThickness="1">
+            <StackPanel Orientation="Horizontal">
+              <Border Width="7" Height="7" CornerRadius="4" Background="{StaticResource ExplorerAccentBrush}"
+                  VerticalAlignment="Center" Margin="0,0,7,0" />
+              <TextBlock Text="OSCQuery Workspace" FontSize="10" FontWeight="SemiBold"
+                     Foreground="{StaticResource ExplorerAccentBrush}" />
+            </StackPanel>
+          </Border>
+
+          <StackPanel Grid.Row="1" Margin="0,16,0,20">
+            <TextBlock Text="OSCQuery Explorer" FontSize="34" FontWeight="SemiBold"
+                   TextWrapping="Wrap" />
+            <TextBlock Margin="0,10,0,0" FontSize="13" LineHeight="21" TextWrapping="Wrap"
+                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                   Text="サービスを見つけて、アドレス空間をたどり、値を操作するための、やわらかなワークスペースです。" />
+          </StackPanel>
+
+          <Border Grid.Row="2" Style="{StaticResource PaneSurface}" Padding="18" Margin="0,0,0,16">
+            <Grid>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="34" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="34" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+
+              <Border Width="44" Height="44" CornerRadius="13" Background="#1A6C63FF" HorizontalAlignment="Center">
+                <ui:SymbolIcon Symbol="PlugConnected24" Foreground="{StaticResource ExplorerAccentBrush}"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </Border>
+              <Grid Grid.Column="1" VerticalAlignment="Center">
+                <Border Height="1" Background="{DynamicResource ControlElevationBorderBrush}" />
+                <ui:SymbolIcon Symbol="ChevronRight20" FontSize="13" HorizontalAlignment="Center"
+                         Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+              </Grid>
+              <Border Grid.Column="2" Width="44" Height="44" CornerRadius="13" Background="#1A0EA5E9" HorizontalAlignment="Center">
+                <ui:SymbolIcon Symbol="FolderOpen24" Foreground="{StaticResource InspectorAccentBrush}"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </Border>
+              <Grid Grid.Column="3" VerticalAlignment="Center">
+                <Border Height="1" Background="{DynamicResource ControlElevationBorderBrush}" />
+                <ui:SymbolIcon Symbol="ChevronRight20" FontSize="13" HorizontalAlignment="Center"
+                         Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+              </Grid>
+              <Border Grid.Column="4" Width="44" Height="44" CornerRadius="13" Background="#1A10B981" HorizontalAlignment="Center">
+                <ui:SymbolIcon Symbol="Pulse24" Foreground="{StaticResource ParameterAccentBrush}"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </Border>
+
+              <TextBlock Grid.Row="1" Text="自動検出" FontSize="11" FontWeight="SemiBold"
+                     HorizontalAlignment="Center" Margin="0,9,0,0" />
+              <TextBlock Grid.Row="1" Grid.Column="2" Text="探索・操作" FontSize="11" FontWeight="SemiBold"
+                     HorizontalAlignment="Center" Margin="0,9,0,0" />
+              <TextBlock Grid.Row="1" Grid.Column="4" Text="ログで確認" FontSize="11" FontWeight="SemiBold"
+                     HorizontalAlignment="Center" Margin="0,9,0,0" />
+            </Grid>
+          </Border>
+
+          <Grid Grid.Row="3">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="10" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="10" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Border Style="{StaticResource SectionCard}" Padding="12">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="32" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                <Border Width="28" Height="28" CornerRadius="8" Background="#1A6C63FF">
+                  <ui:SymbolIcon Symbol="FolderOpen24" FontSize="15" Foreground="{StaticResource ExplorerAccentBrush}"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                  <TextBlock Text="アドレス空間" FontSize="11" FontWeight="SemiBold" />
+                  <TextBlock Text="ツリーで直感的に探索" FontSize="10" Margin="0,2,0,0"
+                         Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+              </Grid>
+            </Border>
+
+            <Border Grid.Column="2" Style="{StaticResource SectionCard}" Padding="12">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="32" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                <Border Width="28" Height="28" CornerRadius="8" Background="#1AF59E0B">
+                  <ui:SymbolIcon Symbol="Pin24" FontSize="15" Foreground="{StaticResource PinnedAccentBrush}"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                  <TextBlock Text="ピン留め" FontSize="11" FontWeight="SemiBold" />
+                  <TextBlock Text="よく使う値を手元に" FontSize="10" Margin="0,2,0,0"
+                         Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+              </Grid>
+            </Border>
+
+            <Border Grid.Row="2" Grid.ColumnSpan="3" Style="{StaticResource SectionCard}" Padding="12">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="32" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <Border Width="28" Height="28" CornerRadius="8" Background="#1A0EA5E9">
+                  <ui:SymbolIcon Symbol="Code24" FontSize="15" Foreground="{StaticResource InspectorAccentBrush}"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                  <TextBlock Text="型に合わせたコントローラー" FontSize="11" FontWeight="SemiBold" />
+                  <TextBlock Text="トグル・スライダー・数値入力を自動で表示" FontSize="10" Margin="0,2,0,0"
+                         Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+                <Border Grid.Column="2" Padding="8,3" CornerRadius="9" Background="#1610B981" VerticalAlignment="Center">
+                  <TextBlock Text="VRChat Ready" FontSize="9" FontWeight="Bold" Foreground="{StaticResource ParameterAccentBrush}" />
+                </Border>
+              </Grid>
+            </Border>
+          </Grid>
+        </Grid>
+      </Grid>
+
+      <Grid Grid.Column="1" Margin="40,28,60,28">
+        <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+        <Border Grid.Row="1" MaxWidth="620" Padding="28" Style="{StaticResource PaneSurface}" HorizontalAlignment="Stretch">
+          <Grid>
+            <StackPanel>
+              <TextBlock Text="OSCQueryサービスに接続" FontSize="27" FontWeight="SemiBold" />
+              <TextBlock Text="検出された接続先をクリックするか、HTTPエンドポイントを入力してください。" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,7,0,24" />
+              <Grid Margin="0,0,0,8"><TextBlock Text="検出されたサービス" Style="{StaticResource Eyebrow}" VerticalAlignment="Center" /><ui:Button HorizontalAlignment="Right" Style="{StaticResource ToolIconButton}" Icon="{ui:SymbolIcon ArrowClockwise24}" Command="{Binding RefreshDiscoveryCommand}" ToolTip="再探索" /></Grid>
+              <ListBox Height="190" Margin="0,0,0,20" ItemsSource="{Binding DiscoveredServices}" SelectedItem="{Binding SelectedService}" PreviewMouseLeftButtonUp="ConnectionService_Click" BorderThickness="1" BorderBrush="{DynamicResource ControlElevationBorderBrush}" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem"><Setter Property="HorizontalContentAlignment" Value="Stretch" /><Setter Property="Padding" Value="10,8" /></Style></ListBox.ItemContainerStyle>
+                <ListBox.ItemTemplate><DataTemplate><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><Border Width="34" Height="34" CornerRadius="9" Background="#1A6C63FF" Margin="0,0,11,0"><ui:SymbolIcon Symbol="PlugConnected24" Foreground="{StaticResource ExplorerAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border><StackPanel Grid.Column="1"><TextBlock Text="{Binding Identity.Name}" FontWeight="SemiBold" /><TextBlock Text="{Binding HttpEndpoint}" FontSize="11" FontFamily="Cascadia Mono,Consolas" Foreground="{DynamicResource TextFillColorSecondaryBrush}" /></StackPanel></Grid></DataTemplate></ListBox.ItemTemplate>
+              </ListBox>
+              <TextBlock Text="HTTPエンドポイント" Style="{StaticResource Eyebrow}" />
+              <ui:TextBox Text="{Binding ManualUrl, UpdateSourceTrigger=PropertyChanged}" Margin="0,7,0,18" PlaceholderText="http://127.0.0.1:9001/" />
+              <Grid><TextBlock Text="一覧はクリックすると接続します" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="11" VerticalAlignment="Center" /><ui:Button Content="接続" Click="Connect_Click" Appearance="Primary" HorizontalAlignment="Right" Padding="22,8" /></Grid>
+              <Border Margin="0,14,0,0" Padding="11,9" CornerRadius="8" Background="#18C42B1C" BorderBrush="#55C42B1C" BorderThickness="1" Visibility="{Binding HasConnectionError, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <TextBlock Text="{Binding ConnectionError}" Foreground="#C42B1C" TextWrapping="Wrap" />
+              </Border>
+            </StackPanel>
+          </Grid>
+        </Border>
+      </Grid>
+
+      <Border Grid.ColumnSpan="2" Panel.ZIndex="200" Background="#B0000000" Visibility="{Binding IsConnecting, Converter={StaticResource BooleanToVisibilityConverter}}">
+        <Border HorizontalAlignment="Center" VerticalAlignment="Center" Width="360" Padding="32" Style="{StaticResource PaneSurface}">
+          <StackPanel>
+            <ProgressBar IsIndeterminate="True" Height="4" />
+            <TextBlock Text="接続しています…" HorizontalAlignment="Center" Margin="0,16,0,0" FontSize="16" FontWeight="SemiBold" />
+            <TextBlock Text="接続先からの応答を待っています" HorizontalAlignment="Center" Margin="0,6,0,0" FontSize="11" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+          </StackPanel>
+        </Border>
+      </Border>
+    </Grid>
+  </Grid>
+</ui:FluentWindow>

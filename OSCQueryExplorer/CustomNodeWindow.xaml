@@ -1,0 +1,12 @@
+<ui:FluentWindow x:Class="OSCQueryExplorer.CustomNodeWindow"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+  Title="カスタムノードを追加" Width="500" Height="280" ResizeMode="NoResize" WindowStartupLocation="CenterOwner">
+  <Grid Margin="24"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+    <TextBlock Text="接続先に存在しないOSCアドレスを登録します。登録だけでは自身のOSCQuery公開は有効になりません。" TextWrapping="Wrap" Margin="0,0,0,16"/>
+    <StackPanel Grid.Row="1"><TextBlock Text="フルOSCアドレス"/><TextBox x:Name="AddressBox" Text="/custom/value" Margin="0,4,0,12"/></StackPanel>
+    <StackPanel Grid.Row="2"><TextBlock Text="タイプタグ（先頭のカンマ不要）"/><TextBox x:Name="TypeBox" Text="f" Margin="0,4,0,12"/></StackPanel>
+    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0"><ui:Button Content="キャンセル" IsCancel="True" Margin="4"/><ui:Button Content="追加" Appearance="Primary" Click="Add_Click" Margin="4"/></StackPanel>
+  </Grid>
+</ui:FluentWindow>

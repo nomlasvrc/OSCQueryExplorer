@@ -1,0 +1,39 @@
+# Visual Studio / Rider
+.vs/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# .NET build output
+**/bin/
+**/obj/
+artifacts/
+publish/
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+# Packaging output
+installer/output/
+*.nupkg
+*.snupkg
+
+# Local settings and secrets
+*.local.json
+*.secrets.json
+.env
+.env.*
+
+# OS-generated files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
+~$*
