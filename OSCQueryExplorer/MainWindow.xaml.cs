@@ -331,7 +331,7 @@ public partial class MainWindow : FluentWindow
         new(double.IsFinite(value) ? Math.Max(value, minimum) : minimum, GridUnitType.Pixel);
     private static double ValidActualSize(double value, double minimum) =>
         double.IsFinite(value) && value >= minimum ? value : minimum;
-    protected override async void OnClosing(CancelEventArgs e)
+    protected override void OnClosing(CancelEventArgs e)
     {
         if (_canClose)
         {
@@ -340,7 +340,12 @@ public partial class MainWindow : FluentWindow
         }
 
         e.Cancel = true;
-        if (_isClosing) return;
+        if (_isClosing)
+        {
+            base.OnClosing(e);
+            return;
+        }
+
         _isClosing = true;
         CapturePaneSizes();
         SystemThemeWatcher.UnWatch(this);
@@ -349,14 +354,23 @@ public partial class MainWindow : FluentWindow
         _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
         _viewModel.TreeUpdating -= Tree_Updating;
         _viewModel.TreeUpdated -= Tree_Updated;
+        _ = CompleteShutdownAsync();
+        base.OnClosing(e);
+    }
+
+    private async Task CompleteShutdownAsync()
+    {
         try
         {
             await _viewModel.DisposeAsync();
         }
-        finally
+        catch (Exception exception)
         {
-            _canClose = true;
-            Close();
+            Debug.WriteLine($"終了処理に失敗しました: {exception}");
         }
+
+        if (Dispatcher.HasShutdownStarted) return;
+        _canClose = true;
+        Application.Current.Shutdown();
     }
 }
