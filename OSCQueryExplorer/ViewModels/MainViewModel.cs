@@ -208,11 +208,21 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         if (e.PropertyName == nameof(OscNode.Observed))
         {
             Raise(nameof(SelectedValueText)); Raise(nameof(SelectedValueStatus));
+            var values = SelectedNode?.Observed?.Values;
+            if (values is not null)
+                for (var i = 0; i < Math.Min(values.Count, ArgumentEditors.Count); i++)
+                    ArgumentEditors[i].ApplyObservedValue(values[i]);
         }
-        else if (e.PropertyName is nameof(OscNode.TypeTag) or nameof(OscNode.Access))
+        else if (e.PropertyName == nameof(OscNode.TypeTag))
         {
             BuildMetadata();
             BuildEditors();
+            Raise(nameof(IsSelectedNodeWritable)); Raise(nameof(IsSelectedNodeReadOnly));
+            CommandsChanged();
+        }
+        else if (e.PropertyName == nameof(OscNode.Access))
+        {
+            BuildMetadata();
             Raise(nameof(IsSelectedNodeWritable)); Raise(nameof(IsSelectedNodeReadOnly));
             CommandsChanged();
         }
@@ -426,7 +436,6 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             return;
         }
 
-        BuildEditors();
         BuildMetadata();
     }
 
@@ -635,7 +644,8 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     {
         if (!IsConnected || _hostInfo is null || _endpoint is null) return;
         if (node.Access is { } access && !access.HasFlag(OscAccess.Write)) return;
-        var values = editors.Select(x => x.TryGetValue()).ToArray();
+        var editorList = editors.ToArray();
+        var values = editorList.Select(x => x.TryGetValue()).ToArray();
         if (values.Length == 0 || values.Any(x => x is null)) { AddSystem(SystemLevel.Warning, $"{node.FullPath}: 入力が不完全、または送信非対応の型です。"); return; }
         try
         {
@@ -646,6 +656,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             var destination = new IPEndPoint(address, _hostInfo.OscPort ?? _endpoint.Port);
             var message = new OscMessage(node.FullPath, values.Select(x => x!).ToArray());
             var local = await _udp.SendAsync(message, destination, cancellationToken);
+            foreach (var editor in editorList) editor.MarkClean();
             _history.Add(id => new(id, DateTimeOffset.Now, HistoryKind.Osc, string.Empty, OscDirection.Sent, local.Port, destination.Port,
                 message.Address, node.TypeTag, message.Arguments, SourceAddress: local.Address.Equals(IPAddress.Any) ? null : local.Address.ToString(), DestinationAddress: destination.Address.ToString()));
         }

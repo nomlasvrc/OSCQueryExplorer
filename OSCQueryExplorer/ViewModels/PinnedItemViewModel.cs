@@ -35,7 +35,7 @@ public sealed class PinnedItemViewModel : ObservableObject, IDisposable
             Raise(nameof(ValueText));
             var values = Node.Observed?.Values;
             if (values is null) return;
-            for (var i = 0; i < Math.Min(values.Count, Editors.Count); i++) Editors[i].SetValue(values[i]);
+            for (var i = 0; i < Math.Min(values.Count, Editors.Count); i++) Editors[i].ApplyObservedValue(values[i]);
         }
     }
 

@@ -10,6 +10,8 @@ public sealed class ArgumentEditorViewModel : ObservableObject
     private bool _boolean;
     private double _numericValue;
     private TypeDisplayFormat _displayFormat;
+    private bool _isApplyingObservedValue;
+    public bool IsDirty { get; private set; }
     public int Index { get; init; }
     public char TypeTag { get; init; }
     public string? Description { get; init; }
@@ -30,8 +32,22 @@ public sealed class ArgumentEditorViewModel : ObservableObject
     public double Maximum { get; init; } = 1;
     public double TickFrequency => TypeTag is 'i' or 'h' ? 1 : Math.Max((Maximum - Minimum) / 100, 0.001);
     public bool CanSend => TypeTag is 'i' or 'f' or 's' or 'h' or 'd' or 'T' or 'F';
-    public string Text { get => _text; set => Set(ref _text, value); }
-    public bool Boolean { get => _boolean; set => Set(ref _boolean, value); }
+    public string Text
+    {
+        get => _text;
+        set
+        {
+            if (Set(ref _text, value) && !_isApplyingObservedValue) IsDirty = true;
+        }
+    }
+    public bool Boolean
+    {
+        get => _boolean;
+        set
+        {
+            if (Set(ref _boolean, value) && !_isApplyingObservedValue) IsDirty = true;
+        }
+    }
     public double NumericValue
     {
         get => _numericValue;
@@ -45,14 +61,30 @@ public sealed class ArgumentEditorViewModel : ObservableObject
 
     public void SetValue(OscValue value)
     {
-        Boolean = value.Kind == OscValueKind.True || value.Value is true;
-        Text = value.Kind == OscValueKind.String
-            ? Convert.ToString(value.Value, CultureInfo.InvariantCulture) ?? string.Empty
-            : value.ToDisplayString();
-        if (IsNumeric && double.TryParse(Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var numeric))
-            _numericValue = Math.Clamp(numeric, Minimum, Maximum);
-        Raise(nameof(NumericValue));
+        _isApplyingObservedValue = true;
+        try
+        {
+            Boolean = value.Kind == OscValueKind.True || value.Value is true;
+            Text = value.Kind == OscValueKind.String
+                ? Convert.ToString(value.Value, CultureInfo.InvariantCulture) ?? string.Empty
+                : value.ToDisplayString();
+            if (IsNumeric && double.TryParse(Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var numeric))
+                _numericValue = Math.Clamp(numeric, Minimum, Maximum);
+            Raise(nameof(NumericValue));
+            IsDirty = false;
+        }
+        finally
+        {
+            _isApplyingObservedValue = false;
+        }
     }
+
+    public void ApplyObservedValue(OscValue value)
+    {
+        if (!IsDirty) SetValue(value);
+    }
+
+    public void MarkClean() => IsDirty = false;
 
     public OscValue? TryGetValue() => TypeTag switch
     {

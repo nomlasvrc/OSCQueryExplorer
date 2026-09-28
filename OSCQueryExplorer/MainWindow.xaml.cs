@@ -65,7 +65,11 @@ public partial class MainWindow : FluentWindow
         _viewModel.SelectedService = null;
         ConnectionOverlay.Visibility = Visibility.Visible;
     }
-    private async void Argument_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e) => await _viewModel.SendIfImmediateAsync();
+    private async void Argument_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (FocusMovedToExplorer(e) || sender is not FrameworkElement { DataContext: ArgumentEditorViewModel editor } || !_viewModel.ArgumentEditors.Contains(editor)) return;
+        await _viewModel.SendIfImmediateAsync();
+    }
     private async void Argument_KeyDown(object sender, KeyEventArgs e) { if (e.Key == Key.Enter) { await _viewModel.SendIfImmediateAsync(); e.Handled = true; } }
     private async void ArgumentToggle_Click(object sender, RoutedEventArgs e) => await _viewModel.SendIfImmediateAsync();
     private async void ArgumentSlider_MouseUp(object sender, MouseButtonEventArgs e) => await _viewModel.SendIfImmediateAsync();
@@ -75,7 +79,11 @@ public partial class MainWindow : FluentWindow
     }
     private async void PinnedToggle_Click(object sender, RoutedEventArgs e) => await SendPinnedFromElementAsync(sender);
     private async void PinnedSlider_MouseUp(object sender, MouseButtonEventArgs e) => await SendPinnedFromElementAsync(sender);
-    private async void PinnedEditor_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e) => await SendPinnedFromElementAsync(sender);
+    private async void PinnedEditor_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (FocusMovedToExplorer(e)) return;
+        await SendPinnedFromElementAsync(sender);
+    }
     private async void PinnedEditor_KeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key != Key.Enter) return;
@@ -85,6 +93,8 @@ public partial class MainWindow : FluentWindow
     {
         if (FindDataContext<PinnedItemViewModel>(sender as DependencyObject) is { } item) await _viewModel.SendPinnedAsync(item);
     }
+    private bool FocusMovedToExplorer(KeyboardFocusChangedEventArgs e) =>
+        e.NewFocus is DependencyObject element && ReferenceEquals(FindVisualAncestor<TreeView>(element), ExplorerTree);
     private async void PinnedUnpin_Click(object sender, RoutedEventArgs e)
     {
         if (FindDataContext<PinnedItemViewModel>(sender as DependencyObject) is { } item) await _viewModel.TogglePinAsync(item.Node);
