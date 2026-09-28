@@ -4,7 +4,7 @@
   xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
   xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
   xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-  mc:Ignorable="d" Title="OSCQuery Explorer" Width="1500" Height="940"
+  mc:Ignorable="d" Title="OSCQuery Explorer" Icon="Assets/AppIcon.ico" Width="1500" Height="940"
   MinWidth="1180" MinHeight="720" WindowStartupLocation="CenterScreen">
   <Grid Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
     <Grid.RowDefinitions>
