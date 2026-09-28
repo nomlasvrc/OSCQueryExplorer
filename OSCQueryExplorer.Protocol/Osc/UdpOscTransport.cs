@@ -59,5 +59,10 @@ public sealed class UdpOscTransport : IAsyncDisposable
         _sender = null;
     }
 
-    public ValueTask DisposeAsync() { CloseSockets(); return ValueTask.CompletedTask; }
+    public async ValueTask DisposeAsync()
+    {
+        CloseSockets();
+        await _sendGate.WaitAsync();
+        _sendGate.Dispose();
+    }
 }

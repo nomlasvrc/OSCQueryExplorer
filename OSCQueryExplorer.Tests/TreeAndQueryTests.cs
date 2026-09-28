@@ -76,6 +76,40 @@ public sealed class TreeAndQueryTests
     }
 
     [Fact]
+    public void FindIndex_TracksRemoteAndCustomStructureChanges()
+    {
+        var tree = new NodeTree();
+        tree.SetCustomNodes([new("/custom/value", "f")]);
+        Assert.NotNull(tree.Find("/custom/value"));
+
+        tree.SetCustomNodes([]);
+        var remote = new OscNode { FullPath = "/" };
+        remote.Children.Add(new OscNode { FullPath = "/remote" });
+        tree.ReplaceRemoteTree(remote);
+
+        Assert.Null(tree.Find("/custom/value"));
+        Assert.NotNull(tree.Find("/remote"));
+    }
+
+    [Fact]
+    public void PublicationState_CanBeCapturedAndRestored()
+    {
+        var tree = new NodeTree();
+        var remote = new OscNode { FullPath = "/" };
+        remote.Children.Add(new OscNode { FullPath = "/public" });
+        remote.Children.Add(new OscNode { FullPath = "/private" });
+        tree.ReplaceRemoteTree(remote);
+        tree.Find("/private")!.IsPublished = false;
+
+        var unpublished = tree.GetUnpublishedPaths();
+        tree.Find("/private")!.IsPublished = true;
+        tree.ApplyUnpublishedPaths(unpublished);
+
+        Assert.True(tree.Find("/public")!.IsPublished);
+        Assert.False(tree.Find("/private")!.IsPublished);
+    }
+
+    [Fact]
     public void UdpValue_IsNotRewoundByAutomaticHttpValue()
     {
         var tree = new NodeTree();

@@ -16,8 +16,12 @@ public static class OscCodec
 
     public static OscPacket Decode(ReadOnlySpan<byte> packet)
     {
+        if (packet.Length == 0 || packet.Length % 4 != 0)
+            throw new OscProtocolException("OSC packet size must be a non-zero multiple of 4 bytes.");
         var reader = new Reader(packet);
-        return reader.PeekString() == "#bundle" ? DecodeBundle(ref reader) : DecodeMessage(ref reader);
+        OscPacket result = reader.PeekString() == "#bundle" ? DecodeBundle(ref reader) : DecodeMessage(ref reader);
+        if (reader.Remaining != 0) throw new OscProtocolException("OSC packet contains trailing data.");
+        return result;
     }
 
     public static byte[] Encode(OscPacket packet)
@@ -80,7 +84,7 @@ public static class OscCodec
         while (reader.Remaining > 0)
         {
             var size = reader.ReadInt32();
-            if (size <= 0 || size > reader.Remaining) throw new OscProtocolException("Invalid OSC bundle element size.");
+            if (size <= 0 || size % 4 != 0 || size > reader.Remaining) throw new OscProtocolException("Invalid OSC bundle element size.");
             packets.Add(Decode(reader.ReadBytes(size)));
         }
         return new OscBundle(timetag, packets);
@@ -161,16 +165,41 @@ public static class OscCodec
         private int _position;
         public int Remaining => _data.Length - _position;
         public string PeekString() { var copy = this; return copy.ReadString(); }
-        public string ReadString() { var end = _data[_position..].IndexOf((byte)0); if (end < 0) throw new OscProtocolException("Unterminated OSC string."); var result = Encoding.UTF8.GetString(_data.Slice(_position, end)); _position = Align4(_position + end + 1); Require(0); return result; }
+        public string ReadString()
+        {
+            var end = _data[_position..].IndexOf((byte)0);
+            if (end < 0) throw new OscProtocolException("Unterminated OSC string.");
+            var result = Encoding.UTF8.GetString(_data.Slice(_position, end));
+            var contentEnd = _position + end + 1;
+            var alignedEnd = Align4(contentEnd);
+            ValidatePadding(contentEnd, alignedEnd);
+            _position = alignedEnd;
+            return result;
+        }
         public int ReadInt32() => unchecked((int)ReadUInt32());
         public uint ReadUInt32() { Require(4); var value = BinaryPrimitives.ReadUInt32BigEndian(_data[_position..]); _position += 4; return value; }
         public long ReadInt64() => unchecked((long)ReadUInt64());
         public ulong ReadUInt64() { Require(8); var value = BinaryPrimitives.ReadUInt64BigEndian(_data[_position..]); _position += 8; return value; }
         public float ReadSingle() => BitConverter.UInt32BitsToSingle(ReadUInt32());
         public double ReadDouble() => BitConverter.UInt64BitsToDouble(ReadUInt64());
-        public byte[] ReadBlob() { var count = ReadInt32(); if (count < 0) throw new OscProtocolException("Negative blob length."); var result = ReadBytes(count).ToArray(); _position = Align4(_position); Require(0); return result; }
+        public byte[] ReadBlob()
+        {
+            var count = ReadInt32();
+            if (count < 0) throw new OscProtocolException("Negative blob length.");
+            var result = ReadBytes(count).ToArray();
+            var alignedEnd = Align4(_position);
+            ValidatePadding(_position, alignedEnd);
+            _position = alignedEnd;
+            return result;
+        }
         public ReadOnlySpan<byte> ReadBytes(int count) { Require(count); var result = _data.Slice(_position, count); _position += count; return result; }
         private void Require(int count) { if (count < 0 || _position + count > _data.Length) throw new OscProtocolException("OSC packet is truncated."); }
+        private readonly void ValidatePadding(int start, int end)
+        {
+            if (end > _data.Length) throw new OscProtocolException("OSC packet is truncated.");
+            for (var index = start; index < end; index++)
+                if (_data[index] != 0) throw new OscProtocolException("OSC padding must contain only zero bytes.");
+        }
         private static int Align4(int value) => (value + 3) & ~3;
     }
 }

@@ -33,13 +33,13 @@ public partial class MainWindow : FluentWindow
     public MainWindow()
     {
         InitializeComponent(); DataContext = _viewModel;
-        Loaded += async (_, _) =>
+        Loaded += async (_, _) => await ExecuteUiActionAsync(async () =>
         {
             await _viewModel.InitializeAsync();
             RestorePaneSizes();
             ApplyConfiguredTheme();
             await CheckForUpdatesAndNotifyAsync(false, false);
-        };
+        });
         _viewModel.VisibleLog.CollectionChanged += GlobalLog_CollectionChanged;
         _viewModel.ParameterLog.CollectionChanged += ParameterLog_CollectionChanged;
         _viewModel.PropertyChanged += ViewModel_PropertyChanged;
@@ -49,7 +49,7 @@ public partial class MainWindow : FluentWindow
     private void Tree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e) => _viewModel.SelectedNode = e.NewValue as OscNode;
     private async void Connect_Click(object sender, RoutedEventArgs e)
     {
-        await _viewModel.ConnectAsync();
+        await ExecuteUiActionAsync(_viewModel.ConnectAsync);
         if (_viewModel.IsConnected) ConnectionOverlay.Visibility = Visibility.Collapsed;
     }
     private async void ConnectionService_Click(object sender, MouseButtonEventArgs e)
@@ -57,7 +57,7 @@ public partial class MainWindow : FluentWindow
         if (FindDataContext<DiscoveredService>(e.OriginalSource as DependencyObject) is not { } service) return;
         _viewModel.SelectedService = service;
         _viewModel.ManualUrl = service.HttpEndpoint.ToString();
-        await _viewModel.ConnectAsync();
+        await ExecuteUiActionAsync(_viewModel.ConnectAsync);
         if (_viewModel.IsConnected) ConnectionOverlay.Visibility = Visibility.Collapsed;
     }
     private void ShowConnection_Click(object sender, RoutedEventArgs e)
@@ -68,14 +68,15 @@ public partial class MainWindow : FluentWindow
     private async void Argument_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
     {
         if (FocusMovedToExplorer(e) || sender is not FrameworkElement { DataContext: ArgumentEditorViewModel editor } || !_viewModel.ArgumentEditors.Contains(editor)) return;
-        await _viewModel.SendIfImmediateAsync();
+        await ExecuteUiActionAsync(_viewModel.SendIfImmediateAsync);
     }
-    private async void Argument_KeyDown(object sender, KeyEventArgs e) { if (e.Key == Key.Enter) { await _viewModel.SendIfImmediateAsync(); e.Handled = true; } }
-    private async void ArgumentToggle_Click(object sender, RoutedEventArgs e) => await _viewModel.SendIfImmediateAsync();
-    private async void ArgumentSlider_MouseUp(object sender, MouseButtonEventArgs e) => await _viewModel.SendIfImmediateAsync();
+    private async void Argument_KeyDown(object sender, KeyEventArgs e) { if (e.Key == Key.Enter) { await ExecuteUiActionAsync(_viewModel.SendIfImmediateAsync); e.Handled = true; } }
+    private async void ArgumentToggle_Click(object sender, RoutedEventArgs e) => await ExecuteUiActionAsync(_viewModel.SendIfImmediateAsync);
+    private async void ArgumentSlider_MouseUp(object sender, MouseButtonEventArgs e) => await ExecuteUiActionAsync(_viewModel.SendIfImmediateAsync);
     private async void PinnedSend_Click(object sender, RoutedEventArgs e)
     {
-        if (FindDataContext<PinnedItemViewModel>(sender as DependencyObject) is { } item) await _viewModel.SendPinnedAsync(item);
+        if (FindDataContext<PinnedItemViewModel>(sender as DependencyObject) is { } item)
+            await ExecuteUiActionAsync(() => _viewModel.SendPinnedAsync(item));
     }
     private async void PinnedToggle_Click(object sender, RoutedEventArgs e) => await SendPinnedFromElementAsync(sender);
     private async void PinnedSlider_MouseUp(object sender, MouseButtonEventArgs e) => await SendPinnedFromElementAsync(sender);
@@ -91,13 +92,15 @@ public partial class MainWindow : FluentWindow
     }
     private async Task SendPinnedFromElementAsync(object sender)
     {
-        if (FindDataContext<PinnedItemViewModel>(sender as DependencyObject) is { } item) await _viewModel.SendPinnedAsync(item);
+        if (FindDataContext<PinnedItemViewModel>(sender as DependencyObject) is { } item)
+            await ExecuteUiActionAsync(() => _viewModel.SendPinnedAsync(item));
     }
     private bool FocusMovedToExplorer(KeyboardFocusChangedEventArgs e) =>
         e.NewFocus is DependencyObject element && ReferenceEquals(FindVisualAncestor<TreeView>(element), ExplorerTree);
     private async void PinnedUnpin_Click(object sender, RoutedEventArgs e)
     {
-        if (FindDataContext<PinnedItemViewModel>(sender as DependencyObject) is { } item) await _viewModel.TogglePinAsync(item.Node);
+        if (FindDataContext<PinnedItemViewModel>(sender as DependencyObject) is { } item)
+            await ExecuteUiActionAsync(() => _viewModel.TogglePinAsync(item.Node));
     }
 
     private void PinnedList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -149,7 +152,7 @@ public partial class MainWindow : FluentWindow
         if (e.Data.GetData(typeof(PinnedItemViewModel)) is not PinnedItemViewModel source || _pinnedDropTarget is not { } target) return;
         var insertAfter = _pinnedDropAfter;
         ClearPinnedDropIndicator();
-        await _viewModel.MovePinnedAsync(source, target, insertAfter);
+        await ExecuteUiActionAsync(() => _viewModel.MovePinnedAsync(source, target, insertAfter));
         e.Handled = true;
     }
     private void SetPinnedDropIndicator(ListBoxItem container, PinnedItemViewModel target, bool insertAfter)
@@ -194,18 +197,20 @@ public partial class MainWindow : FluentWindow
     private async void AddCustomNode_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new CustomNodeWindow { Owner = this };
-        if (dialog.ShowDialog() == true) await _viewModel.AddCustomNodeAsync(dialog.NodeAddress, dialog.TypeTag);
+        if (dialog.ShowDialog() == true)
+            await ExecuteUiActionAsync(() => _viewModel.AddCustomNodeAsync(dialog.NodeAddress, dialog.TypeTag));
     }
     private async void SliderRangeSettings_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new SliderRangeSettingsWindow(_viewModel.GetSliderRangeTreeRoot(), _viewModel.GetSliderRangeRules()) { Owner = this };
-        if (dialog.ShowDialog() == true) await _viewModel.SetSliderRangeRulesAsync(dialog.Rules);
+        if (dialog.ShowDialog() == true)
+            await ExecuteUiActionAsync(() => _viewModel.SetSliderRangeRulesAsync(dialog.Rules));
     }
     private async void Settings_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new SettingsWindow(_viewModel.GetPreferences(), () => CheckForUpdatesAndNotifyAsync(true, true)) { Owner = this };
         if (dialog.ShowDialog() != true) return;
-        await _viewModel.ApplyPreferencesAsync(dialog.Preferences);
+        await ExecuteUiActionAsync(() => _viewModel.ApplyPreferencesAsync(dialog.Preferences));
         ApplyConfiguredTheme();
     }
 
@@ -239,8 +244,8 @@ public partial class MainWindow : FluentWindow
         }
     }
     private static OscNode? NodeFromMenu(object sender) => (sender as System.Windows.Controls.MenuItem)?.DataContext as OscNode;
-    private async void NodePin_Click(object sender, RoutedEventArgs e) { if (NodeFromMenu(sender) is { } node) await _viewModel.TogglePinAsync(node); }
-    private async void NodePublish_Click(object sender, RoutedEventArgs e) { if (NodeFromMenu(sender) is { } node) await _viewModel.TogglePublishedAsync(node); }
+    private async void NodePin_Click(object sender, RoutedEventArgs e) { if (NodeFromMenu(sender) is { } node) await ExecuteUiActionAsync(() => _viewModel.TogglePinAsync(node)); }
+    private async void NodePublish_Click(object sender, RoutedEventArgs e) { if (NodeFromMenu(sender) is { } node) await ExecuteUiActionAsync(() => _viewModel.TogglePublishedAsync(node)); }
     private void NodeCopy_Click(object sender, RoutedEventArgs e) { if (NodeFromMenu(sender) is { } node) Clipboard.SetText(node.FullPath); }
 
     private void GlobalLog_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) => ScrollToLatestIfFollowing(GlobalLogList);
@@ -291,8 +296,19 @@ public partial class MainWindow : FluentWindow
         var dialog = new SaveFileDialog { Title = "表示中のログをエクスポート", Filter = "Text file (*.txt)|*.txt|CSV file (*.csv)|*.csv", AddExtension = true, DefaultExt = ".txt" };
         if (dialog.ShowDialog(this) != true) return;
         var entries = _viewModel.GetVisibleLogSnapshot();
-        if (Path.GetExtension(dialog.FileName).Equals(".csv", StringComparison.OrdinalIgnoreCase)) await HistoryExporter.ExportCsvAsync(dialog.FileName, entries, _viewModel.TypeDisplay);
-        else await HistoryExporter.ExportTextAsync(dialog.FileName, entries, _viewModel.TypeDisplay);
+        await ExecuteUiActionAsync(() => Path.GetExtension(dialog.FileName).Equals(".csv", StringComparison.OrdinalIgnoreCase)
+            ? HistoryExporter.ExportCsvAsync(dialog.FileName, entries, _viewModel.TypeDisplay)
+            : HistoryExporter.ExportTextAsync(dialog.FileName, entries, _viewModel.TypeDisplay));
+    }
+    private async Task ExecuteUiActionAsync(Func<Task> action)
+    {
+        try { await action(); }
+        catch (OperationCanceledException) when (_isClosing) { }
+        catch (Exception exception)
+        {
+            System.Windows.MessageBox.Show(this, $"操作を完了できませんでした。\n\n{exception.Message}", "OSCQuery Explorer",
+                System.Windows.MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
     private void ApplyConfiguredTheme()
     {

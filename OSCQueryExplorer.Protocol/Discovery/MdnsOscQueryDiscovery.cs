@@ -14,22 +14,32 @@ public sealed class MdnsOscQueryDiscovery : IDisposable
     private readonly MulticastService _mdns = new();
     private readonly ServiceDiscovery _discovery;
     private readonly ConcurrentDictionary<string, SRVRecord> _servers = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, IPAddress> _addresses = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, AddressRecord> _addresses = new(StringComparer.OrdinalIgnoreCase);
     private readonly CancellationTokenSource _lifetimeCts = new();
     private ServiceProfile? _advertisedQuery;
     private ServiceProfile? _advertisedOsc;
     private bool _started;
     public event EventHandler<DiscoveredService>? ServiceFound;
+    public event EventHandler<ServiceIdentity>? ServiceLost;
     public event EventHandler<string>? DiscoveryWarning;
 
     public MdnsOscQueryDiscovery()
     {
         _discovery = new ServiceDiscovery(_mdns);
         _discovery.ServiceInstanceDiscovered += (_, e) => _mdns.SendQuery(e.ServiceInstanceName, type: DnsType.SRV);
+        _discovery.ServiceInstanceShutdown += (_, e) => RemoveServer(Key(e.ServiceInstanceName));
         _mdns.AnswerReceived += (_, e) =>
         {
-            foreach (var server in e.Message.Answers.Concat(e.Message.AdditionalRecords).OfType<SRVRecord>()) _servers[Key(server.Name)] = server;
-            foreach (var address in e.Message.Answers.Concat(e.Message.AdditionalRecords).OfType<AddressRecord>()) _addresses[Key(address.Name)] = address.Address;
+            foreach (var server in e.Message.Answers.Concat(e.Message.AdditionalRecords).OfType<SRVRecord>())
+            {
+                if (server.TTL == TimeSpan.Zero) RemoveServer(Key(server.Name));
+                else _servers[Key(server.Name)] = server;
+            }
+            foreach (var address in e.Message.Answers.Concat(e.Message.AdditionalRecords).OfType<AddressRecord>())
+            {
+                if (address.TTL == TimeSpan.Zero) _addresses.TryRemove(Key(address.Name), out var _removedAddress);
+                else _addresses[Key(address.Name)] = address;
+            }
             PublishResolved();
         };
     }
@@ -39,6 +49,24 @@ public sealed class MdnsOscQueryDiscovery : IDisposable
         if (_started) return;
         _mdns.Start(); _started = true; Refresh();
         _ = RefreshAfterStartupAsync(_lifetimeCts.Token);
+        _ = MaintainCacheAsync(_lifetimeCts.Token);
+    }
+
+    private async Task MaintainCacheAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (true)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
+                foreach (var pair in _servers.ToArray())
+                    if (pair.Value.IsExpired()) RemoveServer(pair.Key);
+                foreach (var pair in _addresses.ToArray())
+                    if (pair.Value.IsExpired()) _addresses.TryRemove(pair.Key, out _);
+                Refresh();
+            }
+        }
+        catch (OperationCanceledException) { }
     }
 
     private async Task RefreshAfterStartupAsync(CancellationToken cancellationToken)
@@ -98,13 +126,24 @@ public sealed class MdnsOscQueryDiscovery : IDisposable
             // A multicast response commonly contains related _osc._udp SRV records.
             // They are OSC endpoints, not OSCQuery HTTP services.
             if (!fqdn.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) continue;
-            if (!_addresses.TryGetValue(Key(server.Target), out var address)) { _mdns.SendQuery(server.Target, type: DnsType.A); continue; }
-            var encodedName = fqdn.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) ? fqdn[..^suffix.Length] : fqdn;
+            if (!_addresses.TryGetValue(Key(server.Target), out var addressRecord)) { _mdns.SendQuery(server.Target, type: DnsType.A); continue; }
+            var encodedName = fqdn[..^suffix.Length];
             var name = DecodeDnsName(encodedName);
             if (name.Equals("OSCQuery Explorer", StringComparison.OrdinalIgnoreCase)) continue;
             var host = server.Target.ToString().TrimEnd('.');
-            ServiceFound?.Invoke(this, new DiscoveredService(new ServiceIdentity(name, host), new UriBuilder("http", address.ToString(), server.Port).Uri, DateTimeOffset.UtcNow));
+            ServiceFound?.Invoke(this, new DiscoveredService(new ServiceIdentity(name, host), new UriBuilder("http", addressRecord.Address.ToString(), server.Port).Uri, DateTimeOffset.UtcNow));
         }
+    }
+
+    private void RemoveServer(string key)
+    {
+        if (!_servers.TryRemove(key, out var server)) return;
+        var fqdn = server.Name.ToString().TrimEnd('.');
+        var suffix = "." + OscQueryServiceType + ".local";
+        if (!fqdn.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) return;
+        var name = DecodeDnsName(fqdn[..^suffix.Length]);
+        if (!name.Equals("OSCQuery Explorer", StringComparison.OrdinalIgnoreCase))
+            ServiceLost?.Invoke(this, new ServiceIdentity(name, server.Target.ToString().TrimEnd('.')));
     }
 
     private static string DecodeDnsName(string value)

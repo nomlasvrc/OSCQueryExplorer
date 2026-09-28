@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Text.RegularExpressions;
 using OSCQueryExplorer.Core.Models;
 
@@ -5,16 +6,16 @@ namespace OSCQueryExplorer.Core.Tree;
 
 public static partial class VrChatNodeMetadata
 {
-    private static readonly IReadOnlyDictionary<(string Path, int Index), string> ArgumentDescriptions =
+    private static readonly FrozenDictionary<(string Path, int Index), string> ArgumentDescriptions =
         new Dictionary<(string Path, int Index), string>
         {
             [("/chatbox/input", 0)] = "表示するテキスト（最大144文字・9行）",
             [("/chatbox/input", 1)] = "即時送信（OFFでキーボードへ入力）",
             [("/chatbox/input", 2)] = "通知音（省略時はON）",
             [("/chatbox/typing", 0)] = "入力中インジケーター"
-        };
+        }.ToFrozenDictionary();
 
-    private static readonly IReadOnlyDictionary<string, string> Descriptions = new Dictionary<string, string>(StringComparer.Ordinal)
+    private static readonly FrozenDictionary<string, string> Descriptions = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         ["/chatbox"] = "VRChat ChatboxのOSC入力です。",
         ["/chatbox/input"] = "VRChat Chatboxへテキストを入力／送信します。引数: text (string)、sendImmediately (bool)、notificationSound (bool、省略時true)。最大144文字・9行です。",
@@ -57,7 +58,7 @@ public static partial class VrChatNodeMetadata
         ["/avatar/eyeheightmin"] = "ワールドによるアバター眼高UIの最小値（m）です。",
         ["/avatar/eyeheightmax"] = "ワールドによるアバター眼高UIの最大値（m）です。",
         ["/avatar/eyeheightscalingallowed"] = "アバターのスケーリングが許可されているかを示すbool値です。"
-    };
+    }.ToFrozenDictionary(StringComparer.Ordinal);
 
     public static bool IsVrChatServiceName(string? name) =>
         name is not null && VrChatServiceNameRegex().IsMatch(name);

@@ -6,9 +6,12 @@ public sealed class NodeTree
 {
     public OscNode Root { get; private set; } = new() { FullPath = "/" };
     private readonly Dictionary<string, CustomNodeDefinition> _custom = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, OscNode> _nodes = new(StringComparer.Ordinal);
     private HashSet<string>? _expansionBeforeSearch;
 
-    public OscNode? Find(string path) => Root.SelfAndDescendants().FirstOrDefault(x => x.FullPath == Normalize(path));
+    public NodeTree() => RebuildIndex();
+
+    public OscNode? Find(string path) => _nodes.GetValueOrDefault(Normalize(path));
 
     public void SetCustomNodes(IEnumerable<CustomNodeDefinition> definitions)
     {
@@ -17,6 +20,7 @@ public sealed class NodeTree
         RemoveCustomNodes(Root);
         ApplyCustomNodes(Root);
         Sort(Root);
+        RebuildIndex();
     }
 
     public bool ReplaceRemoteTree(OscNode remoteRoot)
@@ -45,8 +49,22 @@ public sealed class NodeTree
             }
         }
         Root = remoteRoot;
+        RebuildIndex();
         return true;
     }
+
+    public void ApplyUnpublishedPaths(IEnumerable<string> paths)
+    {
+        foreach (var node in _nodes.Values) node.IsPublished = true;
+        foreach (var path in paths)
+            if (Find(path) is { } node) node.IsPublished = false;
+    }
+
+    public IReadOnlyList<string> GetUnpublishedPaths() => _nodes.Values
+        .Where(node => !node.IsPublished)
+        .Select(node => node.FullPath)
+        .Order(StringComparer.Ordinal)
+        .ToArray();
 
     public IReadOnlyList<OscNode> Search(string? query)
     {
@@ -156,6 +174,12 @@ public sealed class NodeTree
         var sorted = node.Children.OrderByDescending(x => x.Children.Count > 0).ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToArray();
         node.Children.Clear();
         foreach (var child in sorted) { Sort(child); node.Children.Add(child); }
+    }
+
+    private void RebuildIndex()
+    {
+        _nodes.Clear();
+        foreach (var node in Root.SelfAndDescendants()) _nodes[node.FullPath] = node;
     }
 
     public static string Normalize(string path) => "/" + string.Join('/', path.Split('/', StringSplitOptions.RemoveEmptyEntries));
