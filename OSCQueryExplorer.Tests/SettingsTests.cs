@@ -14,15 +14,17 @@ public sealed class SettingsTests
             var settings = new AppSettings { TypeDisplay = TypeDisplayFormat.TypeName };
             settings.Services["HTTP://127.0.0.1:9001"] = new ServiceState
             {
-                PinnedPaths = ["/avatar/parameters/GestureLeft"]
+                PinnedPaths = ["/avatar/parameters/GestureLeft"],
+                UnpublishedPaths = ["/avatar/parameters/Private"]
             };
 
-            var store = new SettingsStore(path);
+            using var store = new SettingsStore(path);
             await store.SaveAsync(settings, TestContext.Current.CancellationToken);
             var restored = await store.LoadAsync(TestContext.Current.CancellationToken);
 
             Assert.Equal(TypeDisplayFormat.TypeName, restored.TypeDisplay);
             Assert.Equal(["/avatar/parameters/GestureLeft"], restored.Services["HTTP://127.0.0.1:9001"].PinnedPaths);
+            Assert.Equal(["/avatar/parameters/Private"], restored.Services["HTTP://127.0.0.1:9001"].UnpublishedPaths);
         }
         finally
         {
@@ -46,7 +48,8 @@ public sealed class SettingsTests
             await File.WriteAllTextAsync(path, """{"Theme":99,"TypeDisplay":99,"LogFontSize":100,"PollingIntervalSeconds":0,"Panes":null,"Services":null}""",
                 TestContext.Current.CancellationToken);
 
-            var settings = await new SettingsStore(path).LoadAsync(TestContext.Current.CancellationToken);
+            using var store = new SettingsStore(path);
+            var settings = await store.LoadAsync(TestContext.Current.CancellationToken);
 
             Assert.Equal(AppTheme.System, settings.Theme);
             Assert.Equal(TypeDisplayFormat.TypeTag, settings.TypeDisplay);

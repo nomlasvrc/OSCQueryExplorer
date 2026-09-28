@@ -64,6 +64,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     private TypeDisplayFormat? _renderedTypeDisplay;
     private long _lastRenderedHistoryId;
     private bool _localSnapshotDirty;
+    private bool _isVrChatService;
     private long _nextLocalSnapshotRefresh;
 
     public ObservableCollection<OscNode> RootNodes { get; } = [];
@@ -83,7 +84,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     public string LogFilter { get => _logFilter; set { if (Set(ref _logFilter, value)) RefreshLog(); } }
     public string Status { get => _status; private set => Set(ref _status, value); }
     public double LogFontSize => _settings.LogFontSize;
-    public string AppVersion => typeof(MainViewModel).Assembly.GetName().Version?.ToString(3) ?? "0.1.1";
+    public string? AppVersion => typeof(MainViewModel).Assembly.GetName().Version?.ToString(3);
     public bool IsConnected { get => _isConnected; private set { if (Set(ref _isConnected, value)) Raise(nameof(IsDisconnected)); } }
     public bool IsDisconnected => !IsConnected;
     public bool IsPaused { get => _isPaused; set { if (Set(ref _isPaused, value) && !value) RefreshLog(); } }
@@ -113,7 +114,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             foreach (var item in PinnedNodes) item.SetTypeDisplay(value);
             foreach (var item in VisibleLog) item.SetTypeDisplay(value);
             if (!IsPaused) RefreshLog();
-            _ = SaveSettingsAsync();
+            _ = SaveSettingsSafelyAsync();
         }
     }
     public string SelectedValueText => SelectedNode?.Observed is { Values.Count: > 0 } observed
@@ -207,11 +208,21 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         if (e.PropertyName == nameof(OscNode.Observed))
         {
             Raise(nameof(SelectedValueText)); Raise(nameof(SelectedValueStatus));
+            var values = SelectedNode?.Observed?.Values;
+            if (values is not null)
+                for (var i = 0; i < Math.Min(values.Count, ArgumentEditors.Count); i++)
+                    ArgumentEditors[i].ApplyObservedValue(values[i]);
         }
-        else if (e.PropertyName is nameof(OscNode.TypeTag) or nameof(OscNode.Access))
+        else if (e.PropertyName == nameof(OscNode.TypeTag))
         {
             BuildMetadata();
             BuildEditors();
+            Raise(nameof(IsSelectedNodeWritable)); Raise(nameof(IsSelectedNodeReadOnly));
+            CommandsChanged();
+        }
+        else if (e.PropertyName == nameof(OscNode.Access))
+        {
+            BuildMetadata();
             Raise(nameof(IsSelectedNodeWritable)); Raise(nameof(IsSelectedNodeReadOnly));
             CommandsChanged();
         }
@@ -242,14 +253,14 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         _valueTimer.Start();
         _treeRefreshTimer = new DispatcherTimer(TimeSpan.FromSeconds(5), DispatcherPriority.Background,
             async (_, _) => await LoadTreeAsync(), App.Current.Dispatcher);
-        ConnectCommand = new(ConnectAsync, () => !IsConnected && !IsConnecting);
-        ReconnectCommand = new(ReconnectAsync, () => !IsConnecting && Uri.TryCreate(ManualUrl, UriKind.Absolute, out _));
-        DisconnectCommand = new(DisconnectAsync, () => IsConnected);
-        RefreshTreeCommand = new(LoadTreeAsync, () => IsConnected);
+        ConnectCommand = new(ConnectAsync, HandleCommandError, () => !IsConnected && !IsConnecting);
+        ReconnectCommand = new(ReconnectAsync, HandleCommandError, () => !IsConnecting && Uri.TryCreate(ManualUrl, UriKind.Absolute, out _));
+        DisconnectCommand = new(DisconnectAsync, HandleCommandError, () => IsConnected);
+        RefreshTreeCommand = new(LoadTreeAsync, HandleCommandError, () => IsConnected);
         ClearLogCommand = new(_history.Clear);
-        PinCommand = new(ToggleSelectedPinAsync, () => SelectedNode is not null);
+        PinCommand = new(ToggleSelectedPinAsync, HandleCommandError, () => SelectedNode is not null);
         RefreshDiscoveryCommand = new(_discovery.Refresh);
-        SendCommand = new(SendCurrentAsync, () => IsConnected && IsSelectedNodeWritable && ArgumentEditors.Count > 0);
+        SendCommand = new(SendCurrentAsync, HandleCommandError, () => IsConnected && IsSelectedNodeWritable && ArgumentEditors.Count > 0);
         _history.Changed += (_, _) => _logDirty = true;
         _query.PathChanged += (_, path) => App.Current.Dispatcher.BeginInvoke(() => _ = RefreshAfterPathChangedAsync(path));
         _query.WebSocketFaulted += (_, ex) => AddSystem(SystemLevel.Warning, $"WebSocket: {ex.Message}。OSC受信は継続します。");
@@ -262,8 +273,17 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             var existing = DiscoveredServices.FirstOrDefault(x => x.Identity.StableKey == service.Identity.StableKey);
             if (existing is not null) DiscoveredServices.Remove(existing);
             DiscoveredServices.Add(service);
+            if (existing is null && VrChatNodeMetadata.IsVrChatServiceName(service.Identity.Name))
+                AddSystem(SystemLevel.Info, $"VRChatを検出しました: {service.Identity.Name} ({service.HttpEndpoint})");
             if (SelectedService is null && service.Identity.StableKey == _settings.LastServiceKey)
                 SelectedService = service;
+        });
+        _discovery.ServiceLost += (_, identity) => App.Current.Dispatcher.BeginInvoke(() =>
+        {
+            var existing = DiscoveredServices.FirstOrDefault(service => service.Identity.StableKey == identity.StableKey);
+            if (existing is null) return;
+            DiscoveredServices.Remove(existing);
+            if (ReferenceEquals(SelectedService, existing)) SelectedService = null;
         });
         _discovery.DiscoveryWarning += (_, message) => AddSystem(SystemLevel.Warning, $"mDNS: {message}");
     }
@@ -295,15 +315,17 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             if (!Uri.TryCreate(ManualUrl, UriKind.Absolute, out var endpoint) || (endpoint.Scheme != "http" && endpoint.Scheme != "https"))
                 throw new ArgumentException("有効なHTTP/HTTPSのOSCQuery URLを入力してください。");
 
+            var isVrChatService = IsVrChatEndpoint(endpoint);
+            CaptureCurrentServiceState();
+            _currentServiceKey = null;
             await DisconnectCoreAsync();
+            _isVrChatService = isVrChatService;
             _connectionCts = new();
             connectionToken = _connectionCts.Token;
             _endpoint = endpoint; Status = "接続中…";
             _hostInfo = await _query.GetHostInfoAsync(endpoint, connectionToken);
-            _currentServiceKey = ServiceStateKey(endpoint);
-            _settings.LastServiceKey = SelectedService?.Identity.StableKey ?? _settings.LastServiceKey;
-            _settings.LastManualEndpoint = endpoint.ToString();
-            if (!_settings.Services.TryGetValue(_currentServiceKey, out var serviceState)) _settings.Services[_currentServiceKey] = serviceState = new ServiceState();
+            var serviceKey = ServiceStateKey(endpoint);
+            if (!_settings.Services.TryGetValue(serviceKey, out var serviceState)) _settings.Services[serviceKey] = serviceState = new ServiceState();
             _tree.SetCustomNodes(serviceState.CustomNodes);
             if (!string.Equals(_hostInfo.OscTransport, "UDP", StringComparison.OrdinalIgnoreCase)) throw new NotSupportedException($"OSC transport {_hostInfo.OscTransport} は未対応です。");
             _receiverTask = _udp.RunReceiverAsync(_settings.PublishToLan ? IPAddress.Any : IPAddress.Loopback, connectionToken);
@@ -313,7 +335,11 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             _nextLocalSnapshotRefresh = Environment.TickCount64 + 250;
             await _localServer.StartAsync(_settings.PublishToLan, connectionToken);
             _discovery.Advertise(_localServer.Port, _udp.ReceiveEndpoint?.Port ?? 0, _settings.PublishToLan);
-            await LoadTreeCoreAsync(endpoint, connectionToken);
+            await LoadTreeCoreAsync(endpoint, connectionToken, serviceState);
+            _currentServiceKey = serviceKey;
+            if (SelectedService is { } selectedService && SameEndpoint(selectedService.HttpEndpoint, endpoint))
+                _settings.LastServiceKey = selectedService.Identity.StableKey;
+            _settings.LastManualEndpoint = endpoint.ToString();
             RestoreServiceState(serviceState);
             IsConnected = true; Status = $"接続済み: {_hostInfo.Name ?? endpoint.Host}  HTTP ✓  OSC受信:{_udp.ReceiveEndpoint?.Port}";
             AddSystem(SystemLevel.Info, $"{endpoint} に接続しました。OSC Receive Port: {_udp.ReceiveEndpoint?.Port}, Local OSCQuery HTTP Port: {_localServer.Port}.");
@@ -349,13 +375,33 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
 
     private static string ServiceStateKey(Uri endpoint) => endpoint.AbsoluteUri.TrimEnd('/').ToUpperInvariant();
 
+    private bool IsVrChatEndpoint(Uri endpoint)
+    {
+        if (SelectedService is { } selected &&
+            SameEndpoint(selected.HttpEndpoint, endpoint) &&
+            VrChatNodeMetadata.IsVrChatServiceName(selected.Identity.Name))
+            return true;
+
+        return DiscoveredServices.Any(service =>
+            SameEndpoint(service.HttpEndpoint, endpoint) &&
+            VrChatNodeMetadata.IsVrChatServiceName(service.Identity.Name));
+    }
+
+    private static bool SameEndpoint(Uri left, Uri right) =>
+        Uri.Compare(
+            left,
+            right,
+            UriComponents.SchemeAndServer | UriComponents.Path,
+            UriFormat.SafeUnescaped,
+            StringComparison.OrdinalIgnoreCase) == 0;
+
     private static string DescribeConnectionError(Exception exception) => exception switch
     {
         ArgumentException => exception.Message,
         HttpRequestException { StatusCode: { } statusCode } => $"OSCQueryサーバーがHTTP {(int)statusCode}を返しました。URLとサーバーの状態を確認してください。",
         HttpRequestException => $"OSCQueryサーバーに接続できませんでした。{exception.Message}",
         TaskCanceledException => "接続がタイムアウトしました。接続先が起動しているか確認してください。",
-        System.Text.Json.JsonException => "接続先から受信したOSCQuery情報を解析できませんでした。",
+        JsonException => "接続先から受信したOSCQuery情報を解析できませんでした。",
         NotSupportedException => exception.Message,
         _ => $"接続中にエラーが発生しました。{exception.Message}"
     };
@@ -382,13 +428,15 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         await LoadTreeAsync();
     }
 
-    private async Task LoadTreeCoreAsync(Uri endpoint, CancellationToken cancellationToken)
+    private async Task LoadTreeCoreAsync(Uri endpoint, CancellationToken cancellationToken, ServiceState? serviceState = null)
     {
         var selectedPath = SelectedNode?.FullPath;
         var root = await _query.GetTreeAsync(endpoint, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         TreeUpdating?.Invoke(this, EventArgs.Empty);
         var structureChanged = _tree.ReplaceRemoteTree(root);
+        ApplyPublicationState(serviceState ?? GetCurrentServiceState());
+        if (_isVrChatService) VrChatNodeMetadata.ApplyDescriptions(_tree.Root);
         _localServer?.UpdateTree(_tree.Root);
         _localSnapshotDirty = false;
         if (structureChanged)
@@ -400,7 +448,6 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             return;
         }
 
-        BuildEditors();
         BuildMetadata();
     }
 
@@ -415,11 +462,11 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     {
         var connectionCts = _connectionCts;
         _connectionCts = null;
-        connectionCts?.Cancel();
+        if (connectionCts is not null) await connectionCts.CancelAsync();
         _udp.CloseSockets();
         _query.AbortWebSocket();
         if (IsConnected) AddSystem(SystemLevel.Info, "切断しました。");
-        IsConnected = false; Status = "未接続"; _endpoint = null; _hostInfo = null; CommandsChanged();
+        IsConnected = false; Status = "未接続"; _endpoint = null; _hostInfo = null; _isVrChatService = false; CommandsChanged();
         var server = _localServer;
         _localServer = null;
         _discovery.StopAdvertising();
@@ -482,6 +529,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     {
         node.IsPublished = !node.IsPublished;
         foreach (var descendant in node.Children.SelectMany(x => x.SelfAndDescendants())) descendant.IsPublished = node.IsPublished;
+        CaptureCurrentServiceState();
         if (_localServer is not null)
         {
             _localServer.UpdateTree(_tree.Root);
@@ -489,6 +537,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             await _localServer.NotifyPathChangedAsync(node.FullPath);
         }
         RefreshTree();
+        await SaveSettingsAsync();
     }
 
     public async Task TogglePinAsync(OscNode node)
@@ -499,6 +548,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
 
     private void RestoreServiceState(ServiceState state)
     {
+        _tree.ApplyUnpublishedPaths(state.UnpublishedPaths);
         foreach (var item in PinnedNodes) item.Dispose();
         PinnedNodes.Clear();
         foreach (var path in state.PinnedPaths)
@@ -576,7 +626,16 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             var range = editorIndex < node.Ranges.Count ? node.Ranges[editorIndex] : null;
             var hasRange = SliderRangeResolver.TryResolve(_settings.SliderRanges, node.FullPath, tag, out var minimum, out var maximum)
                 || TryDouble(range?.Min, out minimum) && TryDouble(range?.Max, out maximum) && maximum > minimum;
-            var editor = new ArgumentEditorViewModel { Index = editorIndex, TypeTag = tag, DisplayFormat = TypeDisplay, HasSlider = hasRange && tag is 'i' or 'f' or 'h' or 'd', Minimum = minimum, Maximum = hasRange ? maximum : 1 };
+            var editor = new ArgumentEditorViewModel
+            {
+                Index = editorIndex,
+                TypeTag = tag,
+                Description = _isVrChatService ? VrChatNodeMetadata.GetArgumentDescription(node.FullPath, editorIndex) : null,
+                DisplayFormat = TypeDisplay,
+                HasSlider = hasRange && tag is 'i' or 'f' or 'h' or 'd',
+                Minimum = minimum,
+                Maximum = hasRange ? maximum : 1
+            };
             if (values is not null && editorIndex < values.Count) editor.SetValue(values[editorIndex]);
             result.Add(editor);
             editorIndex++;
@@ -600,7 +659,8 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     {
         if (!IsConnected || _hostInfo is null || _endpoint is null) return;
         if (node.Access is { } access && !access.HasFlag(OscAccess.Write)) return;
-        var values = editors.Select(x => x.TryGetValue()).ToArray();
+        var editorList = editors.ToArray();
+        var values = editorList.Select(x => x.TryGetValue()).ToArray();
         if (values.Length == 0 || values.Any(x => x is null)) { AddSystem(SystemLevel.Warning, $"{node.FullPath}: 入力が不完全、または送信非対応の型です。"); return; }
         try
         {
@@ -611,6 +671,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
             var destination = new IPEndPoint(address, _hostInfo.OscPort ?? _endpoint.Port);
             var message = new OscMessage(node.FullPath, values.Select(x => x!).ToArray());
             var local = await _udp.SendAsync(message, destination, cancellationToken);
+            foreach (var editor in editorList) editor.MarkClean();
             _history.Add(id => new(id, DateTimeOffset.Now, HistoryKind.Osc, string.Empty, OscDirection.Sent, local.Port, destination.Port,
                 message.Address, node.TypeTag, message.Arguments, SourceAddress: local.Address.Equals(IPAddress.Any) ? null : local.Address.ToString(), DestinationAddress: destination.Address.ToString()));
         }
@@ -639,6 +700,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     private static IEnumerable<OscMessage> Flatten(OscPacket packet) => packet switch
     { OscMessage message => [message], OscBundle bundle => bundle.Packets.SelectMany(Flatten), _ => [] };
     private void AddSystem(SystemLevel level, string message) => _history.Add(id => new(id, DateTimeOffset.Now, HistoryKind.System, message, Level: level));
+    private void HandleCommandError(Exception exception) => AddSystem(SystemLevel.Error, $"操作に失敗しました: {exception.Message}");
     private void RefreshTree() { RootNodes.Clear(); foreach (var node in _tree.Search(TreeSearch)) RootNodes.Add(node); }
     private void RefreshLog()
     {
@@ -677,13 +739,35 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     private async Task SaveSettingsAsync()
     {
         _settings.LogFilter = LogFilter;
+        CaptureCurrentServiceState();
+        await _settingsStore.SaveAsync(_settings);
+    }
+
+    private async Task SaveSettingsSafelyAsync()
+    {
+        try { await SaveSettingsAsync(); }
+        catch (Exception exception) { AddSystem(SystemLevel.Warning, $"設定を保存できませんでした: {exception.Message}"); }
+    }
+
+    private void CaptureCurrentServiceState()
+    {
         if (_currentServiceKey is not null && _settings.Services.TryGetValue(_currentServiceKey, out var state))
         {
             state.PinnedPaths.Clear(); state.PinnedPaths.AddRange(PinnedNodes.Select(x => x.FullPath)); state.SelectedPath = SelectedNode?.FullPath;
             state.ExpandedPaths.Clear();
             foreach (var node in _tree.Root.SelfAndDescendants().Where(x => x.IsExpanded)) state.ExpandedPaths.Add(node.FullPath);
+            state.UnpublishedPaths.Clear();
+            state.UnpublishedPaths.AddRange(_tree.GetUnpublishedPaths());
         }
-        await _settingsStore.SaveAsync(_settings);
+    }
+
+    private ServiceState? GetCurrentServiceState() =>
+        _currentServiceKey is not null && _settings.Services.TryGetValue(_currentServiceKey, out var state) ? state : null;
+
+    private void ApplyPublicationState(ServiceState? state)
+    {
+        if (state is not null)
+            _tree.ApplyUnpublishedPaths(state.UnpublishedPaths);
     }
     public async Task MovePinnedAsync(PinnedItemViewModel source, PinnedItemViewModel target, bool insertAfter)
     {
@@ -694,5 +778,24 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         if (sourceIndex == destinationIndex) return;
         PinnedNodes.Move(sourceIndex, destinationIndex); await SaveSettingsAsync();
     }
-    public async ValueTask DisposeAsync() { _logTimer.Stop(); _valueTimer.Stop(); _treeRefreshTimer.Stop(); await DisconnectAsync(); _discovery.Dispose(); _updateChecker.Dispose(); await SaveSettingsAsync(); await _query.DisposeAsync(); await _udp.DisposeAsync(); }
+    public async ValueTask DisposeAsync()
+    {
+        _logTimer.Stop();
+        _valueTimer.Stop();
+        _treeRefreshTimer.Stop();
+        try
+        {
+            await DisconnectAsync();
+            _discovery.Dispose();
+            _updateChecker.Dispose();
+            await SaveSettingsAsync();
+            await _query.DisposeAsync();
+            await _udp.DisposeAsync();
+        }
+        finally
+        {
+            _connectionGate.Dispose();
+            _settingsStore.Dispose();
+        }
+    }
 }

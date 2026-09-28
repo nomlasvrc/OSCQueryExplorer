@@ -4,7 +4,7 @@
   xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
   xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
   xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-  mc:Ignorable="d" Title="OSCQuery Explorer" Width="1500" Height="940"
+  mc:Ignorable="d" Title="OSCQuery Explorer" Icon="Assets/AppIcon.ico" Width="1500" Height="940"
   MinWidth="1180" MinHeight="720" WindowStartupLocation="CenterScreen">
   <Grid Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
     <Grid.RowDefinitions>
@@ -108,7 +108,12 @@
                 <Grid>
                   <Grid.ContextMenu><ContextMenu><MenuItem Header="ピン留め / 解除" Click="NodePin_Click" /><MenuItem Header="OSCQuery公開 ON/OFF" Click="NodePublish_Click" /><Separator /><MenuItem Header="アドレスをコピー" Click="NodeCopy_Click" /></ContextMenu></Grid.ContextMenu>
                   <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                  <Border Width="6" Height="6" CornerRadius="3" VerticalAlignment="Center" Margin="1,0,7,0" Background="{StaticResource ExplorerAccentBrush}" Opacity="0.55" />
+                  <Border Width="6" Height="6" CornerRadius="3" VerticalAlignment="Center" Margin="1,0,7,0" Opacity="0.55">
+                    <Border.Style><Style TargetType="Border">
+                      <Setter Property="Background" Value="{StaticResource ExplorerAccentBrush}" />
+                      <Style.Triggers><DataTrigger Binding="{Binding IsPublished}" Value="False"><Setter Property="Background" Value="White" /></DataTrigger></Style.Triggers>
+                    </Style></Border.Style>
+                  </Border>
                   <TextBlock Grid.Column="1" Text="{Binding Name}" FontFamily="Cascadia Mono,Consolas" TextWrapping="NoWrap"
                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
                   <ui:SymbolIcon Grid.Column="2" Symbol="Pin24" FontSize="12" Foreground="{StaticResource PinnedAccentBrush}" Visibility="{Binding IsPinned, Converter={StaticResource BooleanToVisibilityConverter}}" Margin="7,0,0,0" />
@@ -159,7 +164,7 @@
                   <Grid Margin="0,0,0,10"><TextBlock Text="コントローラー" Style="{StaticResource Eyebrow}" /><StackPanel HorizontalAlignment="Right" Orientation="Horizontal"><TextBlock Text="読み取り専用" FontSize="9" FontWeight="Bold" Foreground="{StaticResource PinnedAccentBrush}" Visibility="{Binding IsSelectedNodeReadOnly, Converter={StaticResource BooleanToVisibilityConverter}}" Margin="0,0,8,0" /><TextBlock Text="Live" FontSize="9" FontWeight="Bold" Foreground="{StaticResource ParameterAccentBrush}" /></StackPanel></Grid>
                   <ItemsControl ItemsSource="{Binding ArgumentEditors}" IsEnabled="{Binding IsSelectedNodeWritable}">
                     <ItemsControl.ItemTemplate><DataTemplate>
-                      <Grid Margin="0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="58" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                      <Grid Margin="0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="58" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                         <Border Padding="6,3" CornerRadius="6" Background="{DynamicResource ControlFillColorSecondaryBrush}" HorizontalAlignment="Left"><TextBlock Text="{Binding TypeLabel}" FontSize="10" Foreground="{DynamicResource TextFillColorSecondaryBrush}" /></Border>
                         <ui:TextBox Grid.Column="1" Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" LostKeyboardFocus="Argument_LostKeyboardFocus" KeyDown="Argument_KeyDown"><ui:TextBox.Style><Style TargetType="ui:TextBox" BasedOn="{StaticResource ArgumentTextBox}"><Style.Triggers><DataTrigger Binding="{Binding IsBoolean}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger><DataTrigger Binding="{Binding HasSlider}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></ui:TextBox.Style></ui:TextBox>
                         <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding Boolean}" Style="{StaticResource BooleanToggleSwitch}" Click="ArgumentToggle_Click" />
@@ -168,6 +173,9 @@
                           <Slider Minimum="{Binding Minimum}" Maximum="{Binding Maximum}" Value="{Binding NumericValue, Mode=TwoWay}" TickFrequency="{Binding TickFrequency}" PreviewMouseLeftButtonUp="ArgumentSlider_MouseUp" Margin="0,0,8,0" />
                           <ui:TextBox Grid.Column="1" Style="{StaticResource ArgumentTextBox}" Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" LostKeyboardFocus="Argument_LostKeyboardFocus" KeyDown="Argument_KeyDown" Padding="4,2" />
                         </Grid>
+                        <TextBlock Grid.Column="2" Text="{Binding Description}" FontSize="9" TextWrapping="Wrap" MaxWidth="155" Margin="8,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                          <TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers><DataTrigger Binding="{Binding Description}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+                        </TextBlock>
                       </Grid>
                     </DataTemplate></ItemsControl.ItemTemplate>
                   </ItemsControl>
@@ -238,7 +246,7 @@
                     <TextBlock Text="{Binding ValueText}" FontSize="17" FontWeight="SemiBold" TextWrapping="NoWrap" />
                   </Viewbox>
                   <ItemsControl ItemsSource="{Binding Editors}" IsEnabled="{Binding CanControl}" Margin="12,0,0,0"><ItemsControl.ItemTemplate><DataTemplate>
-                    <Grid Margin="0,2"><Grid.ColumnDefinitions><ColumnDefinition Width="40" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                    <Grid Margin="0,2"><Grid.ColumnDefinitions><ColumnDefinition Width="40" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                       <TextBlock Text="{Binding TypeLabel}" FontSize="8" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                       <ui:TextBox Grid.Column="1" Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" LostKeyboardFocus="PinnedEditor_LostKeyboardFocus" KeyDown="PinnedEditor_KeyDown"><ui:TextBox.Style><Style TargetType="ui:TextBox" BasedOn="{StaticResource ArgumentTextBox}"><Style.Triggers><DataTrigger Binding="{Binding IsBoolean}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger><DataTrigger Binding="{Binding HasSlider}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></ui:TextBox.Style></ui:TextBox>
                       <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding Boolean}" Style="{StaticResource BooleanToggleSwitch}" Click="PinnedToggle_Click" />
@@ -247,6 +255,9 @@
                         <Slider Minimum="{Binding Minimum}" Maximum="{Binding Maximum}" Value="{Binding NumericValue, Mode=TwoWay}" TickFrequency="{Binding TickFrequency}" PreviewMouseLeftButtonUp="PinnedSlider_MouseUp" Margin="0,0,8,0" />
                         <ui:TextBox Grid.Column="1" Style="{StaticResource ArgumentTextBox}" Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" LostKeyboardFocus="PinnedEditor_LostKeyboardFocus" KeyDown="PinnedEditor_KeyDown" Padding="4,2" />
                       </Grid>
+                      <TextBlock Grid.Column="2" Text="{Binding Description}" FontSize="8" TextWrapping="Wrap" MaxWidth="95" Margin="6,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                        <TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers><DataTrigger Binding="{Binding Description}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+                      </TextBlock>
                     </Grid>
                   </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
                   <Grid Margin="12,5,0,0"><TextBlock Text="{Binding TypeLabel}" FontFamily="Cascadia Mono,Consolas" FontSize="9" Foreground="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" /><ui:Button Content="送信" Click="PinnedSend_Click" IsEnabled="{Binding CanControl}" Appearance="Primary" HorizontalAlignment="Right" Padding="10,3" /></Grid>
@@ -344,7 +355,7 @@
                    TextWrapping="Wrap" />
             <TextBlock Margin="0,10,0,0" FontSize="13" LineHeight="21" TextWrapping="Wrap"
                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                   Text="サービスを見つけて、アドレス空間をたどり、値を操作するための、やわらかなワークスペースです。" />
+                   Text="サービスを見つけて、アドレス空間をたどり、値を操作するためのワークスペースです。" />
           </StackPanel>
 
           <Border Grid.Row="2" Style="{StaticResource PaneSurface}" Padding="18" Margin="0,0,0,16">

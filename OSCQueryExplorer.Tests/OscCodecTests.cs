@@ -32,6 +32,18 @@ public sealed class OscCodecTests
     public void TruncatedPacket_IsRejected() => Assert.Throws<OscProtocolException>(() => OscCodec.Decode([0x2f, 0x61]));
 
     [Fact]
+    public void PacketSize_NotDivisibleByFour_IsRejected() => Assert.Throws<OscProtocolException>(() =>
+        OscCodec.Decode([0x2f, 0x61, 0x00, 0x00, 0x2c, 0x00, 0x00, 0x00, 0x00]));
+
+    [Fact]
+    public void NonZeroStringPadding_IsRejected() => Assert.Throws<OscProtocolException>(() =>
+        OscCodec.Decode([0x2f, 0x61, 0x00, 0x01, 0x2c, 0x00, 0x00, 0x00]));
+
+    [Fact]
+    public void TrailingPacketData_IsRejected() => Assert.Throws<OscProtocolException>(() =>
+        OscCodec.Decode([0x2f, 0x61, 0x00, 0x00, 0x2c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]));
+
+    [Fact]
     public void TypeTagString_IncludesCompleteNestedArrays()
     {
         OscValue[] values = [new(OscValueKind.Int32, 1), OscValue.Array([new(OscValueKind.Float32, 2f), OscValue.Array([new(OscValueKind.True, true)])])];

@@ -8,6 +8,46 @@ namespace OSCQueryExplorer.Tests;
 
 public sealed class TreeAndQueryTests
 {
+    [Theory]
+    [InlineData("VRChat-Client-a1B2c3", true)]
+    [InlineData("vrchat-client-ABC123", true)]
+    [InlineData("VRChat-Client-ABC12", false)]
+    [InlineData("VRChat-Client-ABC1234", false)]
+    [InlineData("VRChat-Client-ABC-12", false)]
+    [InlineData("Other-Client-ABC123", false)]
+    public void VrChatServiceName_RequiresSixAlphanumericCharacters(string name, bool expected)
+    {
+        Assert.Equal(expected, VrChatNodeMetadata.IsVrChatServiceName(name));
+    }
+
+    [Fact]
+    public void VrChatDescriptions_AnnotateKnownNodesWithoutOverwritingRemoteMetadata()
+    {
+        var root = new OscNode { FullPath = "/" };
+        var chatbox = new OscNode { FullPath = "/chatbox" };
+        chatbox.Children.Add(new OscNode { FullPath = "/chatbox/input", Description = "remote description" });
+        chatbox.Children.Add(new OscNode { FullPath = "/chatbox/typing" });
+        var parameters = new OscNode { FullPath = "/avatar/parameters" };
+        parameters.Children.Add(new OscNode { FullPath = "/avatar/parameters/MyToggle" });
+        root.Children.Add(chatbox);
+        root.Children.Add(parameters);
+
+        VrChatNodeMetadata.ApplyDescriptions(root);
+
+        Assert.Equal("remote description", chatbox.Children[0].Description);
+        Assert.Contains("入力中インジケーター", chatbox.Children[1].Description);
+        Assert.Contains("MyToggle", parameters.Children[0].Description);
+    }
+
+    [Fact]
+    public void VrChatArgumentDescriptions_DescribeEachChatboxInputController()
+    {
+        Assert.Contains("テキスト", VrChatNodeMetadata.GetArgumentDescription("/chatbox/input", 0));
+        Assert.Contains("即時送信", VrChatNodeMetadata.GetArgumentDescription("/chatbox/input", 1));
+        Assert.Contains("通知音", VrChatNodeMetadata.GetArgumentDescription("/chatbox/input", 2));
+        Assert.Null(VrChatNodeMetadata.GetArgumentDescription("/chatbox/input", 3));
+    }
+
     [Fact]
     public void CustomNode_ReturnsAfterRemoteNodeDisappears()
     {
@@ -36,14 +76,49 @@ public sealed class TreeAndQueryTests
     }
 
     [Fact]
+    public void FindIndex_TracksRemoteAndCustomStructureChanges()
+    {
+        var tree = new NodeTree();
+        tree.SetCustomNodes([new("/custom/value", "f")]);
+        Assert.NotNull(tree.Find("/custom/value"));
+
+        tree.SetCustomNodes([]);
+        var remote = new OscNode { FullPath = "/" };
+        remote.Children.Add(new OscNode { FullPath = "/remote" });
+        tree.ReplaceRemoteTree(remote);
+
+        Assert.Null(tree.Find("/custom/value"));
+        Assert.NotNull(tree.Find("/remote"));
+    }
+
+    [Fact]
+    public void PublicationState_CanBeCapturedAndRestored()
+    {
+        var tree = new NodeTree();
+        var remote = new OscNode { FullPath = "/" };
+        remote.Children.Add(new OscNode { FullPath = "/public" });
+        remote.Children.Add(new OscNode { FullPath = "/private" });
+        tree.ReplaceRemoteTree(remote);
+        tree.Find("/private")!.IsPublished = false;
+
+        var unpublished = tree.GetUnpublishedPaths();
+        tree.Find("/private")!.IsPublished = true;
+        tree.ApplyUnpublishedPaths(unpublished);
+
+        Assert.True(tree.Find("/public")!.IsPublished);
+        Assert.False(tree.Find("/private")!.IsPublished);
+    }
+
+    [Fact]
     public void UdpValue_IsNotRewoundByAutomaticHttpValue()
     {
         var tree = new NodeTree();
+        var udpReceivedAt = DateTimeOffset.UtcNow;
         var old = new OscNode { FullPath = "/" };
-        old.Children.Add(new OscNode { FullPath = "/x", Observed = new() { Origin = ValueOrigin.UdpReceived, UpdatedAt = DateTimeOffset.UtcNow, Values = [new(OscValueKind.Int32, 2)] } });
+        old.Children.Add(new OscNode { FullPath = "/x", Observed = new() { Origin = ValueOrigin.UdpReceived, UpdatedAt = udpReceivedAt, Values = [new(OscValueKind.Int32, 2)] } });
         tree.ReplaceRemoteTree(old);
         var refreshed = new OscNode { FullPath = "/" };
-        refreshed.Children.Add(new OscNode { FullPath = "/x", Observed = new() { Origin = ValueOrigin.OscQuery, UpdatedAt = DateTimeOffset.UtcNow.AddSeconds(-1), Values = [new(OscValueKind.Int32, 1)] } });
+        refreshed.Children.Add(new OscNode { FullPath = "/x", Observed = new() { Origin = ValueOrigin.OscQuery, UpdatedAt = udpReceivedAt.AddSeconds(1), Values = [new(OscValueKind.Int32, 1)] } });
         tree.ReplaceRemoteTree(refreshed);
         Assert.Equal(2, tree.Find("/x")!.Observed!.Values[0].Value);
     }

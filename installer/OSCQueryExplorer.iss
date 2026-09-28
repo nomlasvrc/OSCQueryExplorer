@@ -31,6 +31,7 @@ PrivilegesRequired=admin
 PrivilegesRequiredOverridesAllowed=dialog
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
+SetupIconFile=..\OSCQueryExplorer\Assets\AppIcon.ico
 UninstallDisplayIcon={app}\OSCQueryExplorer.exe
 RestartApplications=no
 SetupLogging=yes

@@ -13,6 +13,7 @@ public sealed class ServiceState
 {
     public List<string> PinnedPaths { get; set; } = [];
     public List<CustomNodeDefinition> CustomNodes { get; set; } = [];
+    public List<string> UnpublishedPaths { get; set; } = [];
     public HashSet<string> ExpandedPaths { get; set; } = new(StringComparer.Ordinal);
     public string? SelectedPath { get; set; }
 }

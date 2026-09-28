@@ -3,7 +3,7 @@ using OSCQueryExplorer.Core.Models;
 
 namespace OSCQueryExplorer.Core.Settings;
 
-public sealed class SettingsStore
+public sealed class SettingsStore : IDisposable
 {
     private readonly string _path;
     private readonly SemaphoreSlim _saveGate = new(1, 1);
@@ -55,6 +55,7 @@ public sealed class SettingsStore
                 if (string.IsNullOrWhiteSpace(key) || state is null) continue;
                 state.PinnedPaths = state.PinnedPaths?.Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(StringComparer.Ordinal).ToList() ?? [];
                 state.CustomNodes = state.CustomNodes?.Where(node => node is not null && !string.IsNullOrWhiteSpace(node.FullPath) && !string.IsNullOrWhiteSpace(node.TypeTag)).ToList() ?? [];
+                state.UnpublishedPaths = state.UnpublishedPaths?.Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(StringComparer.Ordinal).ToList() ?? [];
                 state.ExpandedPaths = state.ExpandedPaths is null
                     ? new HashSet<string>(StringComparer.Ordinal)
                     : new HashSet<string>(state.ExpandedPaths.Where(path => !string.IsNullOrWhiteSpace(path)), StringComparer.Ordinal);
@@ -64,4 +65,6 @@ public sealed class SettingsStore
         settings.Services = services;
         return settings;
     }
+
+    public void Dispose() => _saveGate.Dispose();
 }

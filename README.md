@@ -14,7 +14,7 @@ VRChat向けに開発されましたが、VRChat専用アプリではありま�
 - アドレス、Type Tag、ポート、ログレベル等によるログフィルター
 - TXT／CSVエクスポート
 - 接続先をミラーするローカルOSCQuery Server
-- サービス別のPinned、カスタムノード、Explorer状態の保存
+- サービス別のPinned、カスタムノード、公開状態、Explorer状態の保存
 - System／Light／Darkテーマ
 - GitHub Releasesを利用した更新確認
 
